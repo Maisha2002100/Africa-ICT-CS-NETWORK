@@ -148,7 +148,7 @@ tr:hover td{background:var(--surface)}
 
 <div id="loginGate">
   <div class="login-box">
-    <div class="login-logo"><img src="logo.jpeg" alt="Logo" style="width:64px;height:64px;border-radius:14px;object-fit:cover"/></div>
+    <div class="login-logo"><img src="logo.jpeg" alt="Logo" style="width:64px;height:64px;border-radius:14px;object-fit:cover" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/></div>
     <div class="login-title">Admin Access</div>
     <div class="login-sub">Africa ICT &amp; CS Network — Admin Panel</div>
     <div class="login-err" id="loginErr"></div>
@@ -165,7 +165,7 @@ tr:hover td{background:var(--surface)}
 
 <aside class="sidebar" id="sidebarEl">
   <div class="sidebar-logo">
-    <img src="logo.jpeg" alt="Logo" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0"/>
+    <img src="logo.jpeg" alt="Logo" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/>
     <div><div class="logo-text">Africa ICT &amp; CS</div><div class="logo-sub">Admin Panel</div></div>
   </div>
   <div class="sidebar-admin-badge">Live Admin Access</div>
@@ -246,9 +246,13 @@ async function adminLogin() {
     const { data, error } = await db.auth.signInWithPassword({ email, password: pass })
     if (error) throw error
     const { data: profile, error: pe } = await db.from('profiles').select('*').eq('id', data.user.id).single()
-    if (pe || !profile || profile.role !== 'admin') {
+    if (pe) {
       await db.auth.signOut()
-      throw new Error('Access denied: admin role required. Contact your system administrator.')
+      throw new Error('Profile not found. Run the Supabase setup SQL, then create your user in Supabase Auth → Users tab.')
+    }
+    if (!profile || profile.role !== 'admin') {
+      await db.auth.signOut()
+      throw new Error('Admin role not set. In Supabase SQL editor run: UPDATE profiles SET role='admin' WHERE email='' + email + ''')
     }
     adminUser = data.user
     adminProfile = profile
