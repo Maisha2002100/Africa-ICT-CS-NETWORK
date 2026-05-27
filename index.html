@@ -228,7 +228,7 @@ a{color:inherit;text-decoration:none}button{font-family:inherit}
 .cpb-save{font-size:12px;font-weight:700;color:var(--green);background:var(--green-bg);padding:2px 8px;border-radius:100px}
 .pay-pulse{width:56px;height:56px;border-radius:50%;background:var(--accent-bg);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;animation:payPulse 1.5s infinite}
 @keyframes payPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,200,212,.4)}70%{box-shadow:0 0 0 14px rgba(0,200,212,0)}}
-.reveal{opacity:0;transform:translateY(20px);transition:opacity .5s,transform .5s}
+.reveal{opacity:0;transform:translateY(16px);transition:opacity .4s ease,transform .4s ease}
 .reveal.visible{opacity:1;transform:none}
 .toast{position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:320px;animation:toastIn .3s ease;color:#0e1c2e}
 @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -424,7 +424,7 @@ body::before {
 <nav class="nav">
   <div class="nav-inner">
     <div class="nav-logo" id="navLogoTap" onclick="handleLogoTap()" style="cursor:pointer;user-select:none;-webkit-user-select:none">
-      <img src="logo.jpeg" alt="Africa ICT &amp; CS Network" style="width:42px;height:42px;border-radius:9px;object-fit:cover;flex-shrink:0" id="logoImg"/>
+      <img src="logo.jpeg" alt="Africa ICT &amp; CS Network" style="width:42px;height:42px;border-radius:9px;object-fit:cover;flex-shrink:0" id="logoImg" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex'"/><div id="logoFallback" style="display:none;width:42px;height:42px;border-radius:9px;background:linear-gradient(135deg,#00c8d4,#f5a800);align-items:center;justify-content:center;flex-shrink:0;font-weight:900;font-size:14px;color:#0e1c2e">AI</div>
       <div><div class="nav-logo-name">Africa ICT &amp; CS</div><div class="nav-logo-sub">Network</div></div>
     </div>
     <div class="nav-search">
@@ -660,7 +660,7 @@ body::before {
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-grid">
-      <div><div class="footer-brand-name"><img src="logo.jpeg" alt="Africa ICT &amp; CS Network" style="width:32px;height:32px;border-radius:7px;object-fit:cover;vertical-align:middle;margin-right:8px"/>Africa ICT &amp; CS Network</div><div class="footer-brand-desc">The continent's leading tech education platform. Expert-led courses built for Africa, priced for Africa, trusted across 54 nations.</div></div>
+      <div><div class="footer-brand-name"><img src="logo.jpeg" alt="Africa ICT &amp; CS Network" style="width:32px;height:32px;border-radius:7px;object-fit:cover;vertical-align:middle;margin-right:8px" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/>Africa ICT &amp; CS Network</div><div class="footer-brand-desc">The continent's leading tech education platform. Expert-led courses built for Africa, priced for Africa, trusted across 54 nations.</div></div>
       <div><div class="footer-title">Platform</div><div class="footer-links"><a href="courses.html" class="footer-link">Browse Courses</a><a href="#paths" class="footer-link">Learning Paths</a><a href="#instructors" class="footer-link">Instructors</a><span class="footer-link" onclick="openModal('teach')">Teach on Africa ICT</span><a href="#" class="footer-link">Mobile App</a></div></div>
       <div><div class="footer-title">Support</div><div class="footer-links"><a href="#" class="footer-link">Help Centre</a><a href="#" class="footer-link">Payment Support</a><a href="#" class="footer-link">Community Forum</a><a href="#" class="footer-link">Certificate Verify</a><a href="#" class="footer-link">Contact Us</a></div></div>
       <div><div class="footer-title">Company</div><div class="footer-links"><a href="#" class="footer-link">About Us</a><a href="#" class="footer-link">Blog</a><a href="#" class="footer-link">Careers</a><a href="#" class="footer-link">Privacy Policy</a><a href="#" class="footer-link">Terms of Use</a></div></div>
@@ -736,7 +736,12 @@ const PAYHERO_URL     = 'https://backend.payhero.co.ke/api/v2'
 
 const { createClient } = supabase
 let db
-try { db = createClient(SUPABASE_URL, SUPABASE_KEY) } catch(e) { console.warn('Supabase demo mode') }
+try { 
+  db = createClient(SUPABASE_URL, SUPABASE_KEY)
+} catch(e) { 
+  console.warn('Supabase init failed — running in static mode:', e.message)
+  db = null
+}
 
 let currentUser = null, currentProfile = null, pendingCourse = null, pollInterval = null
 
@@ -960,7 +965,7 @@ function renderDBCourses(courses) {
         <div class="cc-meta"><span class="cc-meta-item">${c.duration_hrs||0} hrs</span><span class="cc-meta-item">${c.language||'EN'}</span></div>
         <div class="cc-foot">
           <div><span class="cc-price">KES ${Number(c.price_kes).toLocaleString()}</span>${c.original_price?`<span class="cc-old">KES ${Number(c.original_price).toLocaleString()}</span>`:''}</div>
-          <button class="cc-enroll" onclick="event.stopPropagation();startEnroll('${c.id}','${c.title.replace(/'/g,"\\'")}',${c.price_kes})">Enroll Now</button>
+          <button class="cc-enroll" onclick="event.stopPropagation();startEnroll('${c.id}','${c.title.replace(/'/g,"\\'")}',${c.price_kes},true)">Enroll Now</button>
         </div>
       </div>
     </div>`
@@ -1011,8 +1016,8 @@ function openCourse(card) {
   startEnroll(id, title, price)
 }
 
-function startEnroll(courseId, title, price) {
-  pendingCourse = { id: courseId, title, price: Number(price) }
+function startEnroll(courseId, title, price, fromDB) {
+  pendingCourse = { id: courseId, title, price: Number(price), fromDB: !!fromDB }
   document.getElementById('sc').textContent = title
   document.getElementById('sc_price').textContent = 'KES ' + Number(price).toLocaleString()
   if (!currentUser) { showToast('Sign in to enroll in this course', 'info'); openModal('signin'); return }
@@ -1025,7 +1030,7 @@ async function proceedToPayment() {
   if (!pendingCourse) return
   btn.textContent = 'Checking…'; btn.disabled = true
   try {
-    if (db && pendingCourse.id) {
+    if (db && pendingCourse.id && pendingCourse.fromDB) {
       const { data: existing } = await db.from('enrollments').select('id').eq('user_id', currentUser.id).eq('course_id', pendingCourse.id).single()
       if (existing) { cm(); showToast('You are already enrolled in this course!', 'success'); btn.textContent='Proceed to Payment →';btn.disabled=false; return }
     }
@@ -1072,13 +1077,25 @@ async function initiatePayment() {
       }
     }
     if (res && !res.ok) throw new Error(result?.message || result?.error || `Payment error ${res.status}`)
-    if (db && currentUser && pendingCourse.id) {
-      await db.from('payments').insert({ user_id: currentUser.id, course_id: pendingCourse.id, amount: pendingCourse.price, phone: normPhone, provider, reference, payhero_ref: result.reference||'', status:'pending' })
+    if (db && currentUser) {
+      try {
+        const payRec = { user_id: currentUser.id, amount: pendingCourse.price, phone: normPhone, provider, reference, payhero_ref: result.reference||result.CheckoutRequestID||'', status:'pending' }
+        if (pendingCourse.id && pendingCourse.fromDB) payRec.course_id = pendingCourse.id
+        await db.from('payments').insert(payRec)
+      } catch(insertErr) { console.warn('Payment record save failed:', insertErr.message) }
     }
     document.getElementById('pay_form').style.display = 'none'
     document.getElementById('pay_waiting').style.display = 'block'
     pollPaymentStatus(reference)
-  } catch(err) { showErr('payErr', err.message) }
+  } catch(err) {
+    const msg = err.message || 'Payment failed'
+    const friendly = msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('network') 
+      ? 'Cannot connect to PayHero. Please check your internet connection and try again.'
+      : msg.includes('timeout') || msg.includes('Timeout')
+      ? 'PayHero took too long to respond. Please try again.'
+      : msg
+    showErr('payErr', friendly)
+  }
   finally { btn.textContent = 'Pay Now →'; btn.disabled = false }
 }
 
@@ -1297,7 +1314,7 @@ footer::after,.footer-section::after{content:"";position:absolute;bottom:-20px;r
     <!-- pulsing ring around logo -->
     <div style="width:80px;height:80px;border-radius:50%;margin:0 auto 18px;position:relative">
       <div style="position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(0,200,212,.5);animation:ring 1.5s ease-in-out infinite"></div>
-      <img src="logo.jpeg" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block"/>
+      <img src="logo.jpeg" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/>
     </div>
 
     <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:900;color:#f0f6ff;margin-bottom:4px">Admin Access</div>
@@ -1510,8 +1527,13 @@ function showToast(msg,type='info') {
   setTimeout(()=>t.remove(),3500)
 }
 function setupReveal() {
-  const obs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')}),{threshold:.06})
+  // Show elements already in viewport immediately, animate others on scroll
+  const obs=new IntersectionObserver(entries=>entries.forEach(e=>{
+    if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target)}
+  }),{threshold:0.04,rootMargin:'0px 0px -40px 0px'})
   document.querySelectorAll('.reveal').forEach(el=>obs.observe(el))
+  // Safety fallback: if anything still hidden after 1.5s, force visible
+  setTimeout(()=>document.querySelectorAll('.reveal:not(.visible)').forEach(el=>el.classList.add('visible')),1500)
 }
 </script>
 </body>
