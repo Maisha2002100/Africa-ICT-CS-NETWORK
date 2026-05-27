@@ -236,7 +236,7 @@ body::before {
 <nav class="nav">
   <div class="nav-inner">
     <div class="nav-logo" id="navLogoTap" onclick="handleLogoTap()" style="cursor:pointer;user-select:none;-webkit-user-select:none">
-      <img src="logo.jpeg" alt="Logo" id="logoImg"/>
+      <img src="logo.jpeg" alt="Logo" id="logoImg" onerror="this.onerror=null;this.style.display='none';document.getElementById('logoFbC').style.display='flex'"/><div id="logoFbC" style="display:none;width:40px;height:40px;border-radius:9px;background:linear-gradient(135deg,#00c8d4,#f5a800);align-items:center;justify-content:center;font-weight:900;font-size:13px;color:#0e1c2e;flex-shrink:0">AI</div>
       <div><div class="nav-logo-name">Africa ICT &amp; CS</div><div class="nav-logo-sub">Network</div></div>
     </div>
     <div class="nav-search">
@@ -675,14 +675,19 @@ async function initiatePayment(){
       data=await res.json()
       if(!res.ok)throw new Error(data?.error||`Payment error ${res.status}`)
     }catch(e){
-      // fallback: try direct PayHero with proxy
+      // fallback: try direct PayHero (may hit CORS in browser, works server-side)
       try{
         const pu=`https://api.allorigins.win/raw?url=${encodeURIComponent(PH_URL+'/payments')}`
-        res=await fetch(pu,{method:'POST',headers:{'Content-Type':'application/json','Authorization':PH_AUTH},body:JSON.stringify({amount:pendingCourse.price,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ictcs-api.vercel.app/api/webhook'})}
-)
+        res=await fetch(pu,{method:'POST',headers:{'Content-Type':'application/json','Authorization':PH_AUTH},body:JSON.stringify({amount:pendingCourse.price,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ictcs-api.vercel.app/api/webhook'})})
         data=await res.json()
-        if(!res.ok)throw new Error(data?.message||'Payment failed')
-      }catch(e2){throw new Error(e2.message||'Cannot reach payment server. Check your internet connection.')}
+        if(!res.ok)throw new Error(data?.message||data?.error||'Payment failed')
+      }catch(e2){
+        const msg=e2.message||''
+        if(msg.includes('Failed to fetch')||msg.includes('NetworkError')||msg.includes('fetch')){
+          throw new Error('Cannot connect to PayHero. Please check your internet connection and try again.')
+        }
+        throw new Error(msg||'Payment failed. Please try again.')
+      }
     }
     if(db&&curUser){try{await db.from('payments').insert({user_id:curUser.id,course_id:pendingCourse.fromDB?pendingCourse.id:null,amount:pendingCourse.price,phone:np,provider:prov,reference:ref,payhero_ref:data?.reference||data?.CheckoutRequestID||'',status:'pending'})}catch(e){}}
     btn.style.display='none'
@@ -727,7 +732,7 @@ function showPayFailed(){
 
 function openAuth(tab){
   document.getElementById('authContent').innerHTML=`
-    <div style="text-align:center;margin-bottom:16px"><img src="logo.jpeg" style="width:42px;height:42px;border-radius:10px;object-fit:cover;margin-bottom:8px"/><div style="font-family:'Fraunces',serif;font-size:18px;font-weight:900" id="authT">${tab==='signin'?'Welcome Back':'Create Account'}</div></div>
+    <div style="text-align:center;margin-bottom:16px"><img src="logo.jpeg" style="width:42px;height:42px;border-radius:10px;object-fit:cover;margin-bottom:8px" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/><div style="font-family:'Fraunces',serif;font-size:18px;font-weight:900" id="authT">${tab==='signin'?'Welcome Back':'Create Account'}</div></div>
     
     <div class="auth-tabs"><button class="auth-tab${tab==='signin'?' active':''}" id="siTab" onclick="swTab('signin')">Log In</button><button class="auth-tab${tab==='signup'?' active':''}" id="suTab" onclick="swTab('signup')">Sign Up Free</button></div>
     <div class="auth-err" id="aErr"></div><div class="auth-ok" id="aOk"></div>
@@ -813,7 +818,7 @@ function toast(msg,type='info'){
 <div id="secretOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);backdrop-filter:blur(16px);align-items:center;justify-content:center;padding:20px">
   <div style="background:#112035;border:1.5px solid rgba(0,200,212,0.4);border-radius:22px;width:100%;max-width:400px;padding:32px;position:relative;animation:sslide .3s ease;text-align:center">
     <button onclick="closeSecretPanel()" style="position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#8aa8c8;font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer">×</button>
-    <div style="width:80px;height:80px;border-radius:50%;margin:0 auto 18px;position:relative"><div style="position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(0,200,212,.5);animation:ring 1.5s ease-in-out infinite"></div><img src="logo.jpeg" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block"/></div>
+    <div style="width:80px;height:80px;border-radius:50%;margin:0 auto 18px;position:relative"><div style="position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(0,200,212,.5);animation:ring 1.5s ease-in-out infinite"></div><img src="logo.jpeg" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/></div>
     <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:900;color:#f0f6ff;margin-bottom:4px">Admin Access</div>
     <div style="font-size:12px;color:#4e6e8e;margin-bottom:22px">Africa ICT &amp; CS Network — Staff Only</div>
     <div id="secretErr" style="font-size:12px;color:#f87171;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:7px;padding:8px 12px;margin-bottom:12px;display:none"></div>
