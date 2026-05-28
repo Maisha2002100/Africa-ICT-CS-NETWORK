@@ -25,7 +25,7 @@ body{font-family:"Plus Jakarta Sans",sans-serif;background:var(--navy);color:var
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--navy2)}::-webkit-scrollbar-thumb{background:var(--muted);border-radius:3px}
 a{color:inherit;text-decoration:none}button{font-family:inherit}
 .container{max-width:1200px;margin:0 auto;padding:0 5%}
-.section{padding:80px 0}
+.section{padding:60px 0;min-height:0}
 .divider{border:none;border-top:1px solid var(--border)}
 .announce{background:linear-gradient(90deg,var(--amber),var(--gold));color:#0e1c2e;font-size:13px;font-weight:700;text-align:center;padding:9px 5%;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;min-width:0}
 .announce a{color:#0e1c2e;text-decoration:underline}
@@ -228,8 +228,10 @@ a{color:inherit;text-decoration:none}button{font-family:inherit}
 .cpb-save{font-size:12px;font-weight:700;color:var(--green);background:var(--green-bg);padding:2px 8px;border-radius:100px}
 .pay-pulse{width:56px;height:56px;border-radius:50%;background:var(--accent-bg);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;animation:payPulse 1.5s infinite}
 @keyframes payPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,200,212,.4)}70%{box-shadow:0 0 0 14px rgba(0,200,212,0)}}
-.reveal{opacity:0;transform:translateY(16px);transition:opacity .4s ease,transform .4s ease}
+.reveal{opacity:0;transform:translateY(12px);transition:opacity .35s ease,transform .35s ease}
 .reveal.visible{opacity:1;transform:none}
+/* CRITICAL: prevent invisible sections from showing as gaps */
+.reveal:not(.visible){max-height:none}
 .toast{position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:320px;animation:toastIn .3s ease;color:#0e1c2e}
 @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
@@ -719,7 +721,22 @@ body::before {
       </div>
     </div>
     <!-- DASHBOARD -->
-    <div id="dashM" style="display:none"><div class="mh"><div class="mt">My Learning Dashboard</div><div class="ms" id="dash_greeting">Welcome back!</div></div><div class="mb" id="dash_content"><div style="text-align:center;padding:32px;color:var(--muted)">Loading your courses…</div></div></div>
+    <div id="dashM" style="display:none">
+      <div class="mh" style="position:sticky;top:0;z-index:10;background:var(--navy2);border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--gold));display:flex;align-items:center;justify-content:center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0e1c2e" stroke-width="2.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg>
+          </div>
+          <div><div class="mt" style="margin:0">My Learning</div><div id="dash_greeting" class="ms" style="margin:0">Welcome back!</div></div>
+        </div>
+      </div>
+      <div class="mb" id="dash_content">
+        <div style="text-align:center;padding:40px;color:var(--muted)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;opacity:.4"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Loading your dashboard…
+        </div>
+      </div>
+    </div>
     <!-- INSTRUCTOR -->
     <div id="instrM" style="display:none"><div class="mh"><div class="mt">Instructor Dashboard</div><div class="ms">Manage courses and track revenue</div></div><div class="mb" id="instr_content"><div style="text-align:center;padding:32px;color:var(--muted)">Loading…</div></div></div>
     <!-- CERT -->
@@ -1034,6 +1051,13 @@ async function proceedToPayment() {
       const { data: existing } = await db.from('enrollments').select('id').eq('user_id', currentUser.id).eq('course_id', pendingCourse.id).single()
       if (existing) { cm(); showToast('You are already enrolled in this course!', 'success'); btn.textContent='Proceed to Payment →';btn.disabled=false; return }
     }
+    // FREE COURSE: enroll instantly, no payment needed
+    if (pendingCourse.price === 0) {
+      btn.textContent = 'Enrolling…'
+      await doFreeEnroll(pendingCourse)
+      btn.textContent = 'Proceed to Payment →'; btn.disabled = false
+      return
+    }
   } catch(e) {}
   openModal('payment')
   document.getElementById('pay_course_name').textContent = pendingCourse.title
@@ -1156,36 +1180,192 @@ function openDashboard() {
 
 async function loadDashboard() {
   const c = document.getElementById('dash_content')
-  if (!db||!currentUser) { c.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">Sign in to view your courses</div>'; return }
-  document.getElementById('dash_greeting').textContent = 'Welcome back, ' + (currentProfile?.full_name||'Learner').split(' ')[0] + '!'
+  const greeting = document.getElementById('dash_greeting')
+  const name = (currentProfile?.full_name || 'Learner').split(' ')[0]
+  if (greeting) greeting.textContent = 'Welcome back, ' + name + '! 👋'
+  
+  if (!db || !currentUser) {
+    c.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin:0 auto 12px;display:block;opacity:.3"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <div style="font-weight:700;color:var(--white);margin-bottom:8px">Sign in to see your courses</div>
+      <button class="modal-btn" onclick="openModal('signin')">Sign In</button>
+    </div>`
+    return
+  }
+  
+  c.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)"><div style="width:28px;height:28px;border:3px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div>Loading your courses…</div>`
+  
   try {
-    const [eR, certR] = await Promise.all([
-      db.from('enrollments').select('*,courses(id,title,thumbnail_url,category,instructor_id,profiles:instructor_id(full_name))').eq('user_id',currentUser.id).eq('status','active').order('last_accessed',{ascending:false}),
-      db.from('certificates').select('*,courses(title,category)').eq('user_id',currentUser.id)
-    ])
-    const enr = eR.data||[], certs = certR.data||[]
+    // Load enrollments + any local enrollments stored in localStorage
+    let enrollments = []
+    let certs = []
+    
+    if (db) {
+      const [eR, certR] = await Promise.all([
+        db.from('enrollments').select('*').eq('user_id', currentUser.id).eq('status', 'active').order('enrolled_at', {ascending: false}),
+        db.from('certificates').select('*').eq('user_id', currentUser.id)
+      ])
+      enrollments = eR.data || []
+      certs = certR.data || []
+    }
+    
+    // Merge with any locally-tracked enrollments (for static courses)
+    const localKey = 'aictn_enrollments_' + currentUser.id
+    let localEnrollments = []
+    try { localEnrollments = JSON.parse(localStorage.getItem(localKey) || '[]') } catch(e){}
+    // Merge: DB enrollments take priority
+    const dbIds = new Set(enrollments.map(e => e.course_id))
+    localEnrollments.forEach(le => { if (!dbIds.has(le.course_id)) enrollments.push(le) })
+    
+    const completed = enrollments.filter(e => e.progress_percent >= 100)
+    const inProgress = enrollments.filter(e => e.progress_percent > 0 && e.progress_percent < 100)
+    
     c.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center"><div style="font-family:'Fraunces',serif;font-size:26px;font-weight:900;color:var(--cyan)">${enr.length}</div><div style="font-size:12px;color:var(--muted)">Enrolled</div></div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center"><div style="font-family:'Fraunces',serif;font-size:26px;font-weight:900;color:var(--gold)">${certs.length}</div><div style="font-size:12px;color:var(--muted)">Certificates</div></div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center"><div style="font-family:'Fraunces',serif;font-size:26px;font-weight:900;color:var(--green)">${enr.filter(e=>e.progress_percent===100).length}</div><div style="font-size:12px;color:var(--muted)">Completed</div></div>
+      <!-- Stats Row -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+        <div style="background:linear-gradient(135deg,rgba(0,200,212,.15),rgba(0,200,212,.05));border:1px solid rgba(0,200,212,.3);border-radius:14px;padding:16px;text-align:center">
+          <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:900;color:var(--cyan);line-height:1">${enrollments.length}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;font-weight:600">Enrolled</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(245,168,0,.15),rgba(245,168,0,.05));border:1px solid rgba(245,168,0,.3);border-radius:14px;padding:16px;text-align:center">
+          <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:900;color:var(--gold);line-height:1">${completed.length}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;font-weight:600">Completed</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(34,200,122,.15),rgba(34,200,122,.05));border:1px solid rgba(34,200,122,.3);border-radius:14px;padding:16px;text-align:center">
+          <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:900;color:var(--green);line-height:1">${certs.length}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;font-weight:600">Certificates</div>
+        </div>
       </div>
-      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">My Courses</div>
-      ${enr.length===0?`<div style="text-align:center;padding:28px;color:var(--muted)"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin:0 auto 10px;display:block;opacity:.4"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg>No courses yet. <a href="#courses" onclick="cm()" style="color:var(--cyan)">Browse courses</a></div>`
-        : enr.map(e=>`<div style="display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
-          <div style="width:48px;height:48px;border-radius:9px;background:var(--navy3);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden">${e.courses?.thumbnail_url?`<img src="${e.courses.thumbnail_url}" style="width:100%;height:100%;object-fit:cover">`:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg>`}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.courses?.title||'Course'}</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${e.courses?.profiles?.full_name||''}</div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px"><span>Progress</span><span style="color:var(--cyan);font-weight:700">${e.progress_percent}%</span></div>
-            <div style="height:4px;background:rgba(255,255,255,.08);border-radius:100px;overflow:hidden"><div style="height:100%;width:${e.progress_percent}%;background:linear-gradient(90deg,var(--cyan),var(--gold));border-radius:100px"></div></div>
+      
+      <!-- Continue Learning -->
+      ${inProgress.length > 0 ? `
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--cyan)"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Continue Learning
+      </div>
+      ${inProgress.map(e => renderEnrollCard(e, 'continue')).join('')}
+      <div style="height:1px;background:var(--border);margin:16px 0"></div>` : ''}
+      
+      <!-- All Courses -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">
+        ${enrollments.length > 0 ? 'All My Courses' : ''}
+      </div>
+      
+      ${enrollments.length === 0 ? `
+        <div style="text-align:center;padding:32px 16px;color:var(--muted)">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin:0 auto 14px;display:block;opacity:.3"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          <div style="font-weight:700;color:var(--white);margin-bottom:8px">No courses yet</div>
+          <div style="font-size:13px;margin-bottom:16px">Enroll in a course to get started</div>
+          <a href="courses.html" onclick="cm()" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;padding:10px 20px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none">Browse Courses →</a>
+        </div>
+      ` : enrollments.map(e => renderEnrollCard(e, 'all')).join('')}
+      
+      <!-- Certificates Section -->
+      ${certs.length > 0 ? `
+      <div style="height:1px;background:var(--border);margin:16px 0"></div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--gold)"><path d="M12 15l-2 5L8 18l-5 2 2-5-3-3 5-1 3-5 3 5 5 1-3 3 2 5-3-2z"/></svg>
+        My Certificates
+      </div>
+      ${certs.map(cert => `
+        <div style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(245,168,0,.1),rgba(245,168,0,.03));border:1px solid rgba(245,168,0,.3);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer" onclick="viewCertificate('${cert.course_id}','${(cert.courses?.title||'Course').replace(/'/g,"\'")}','${cert.cert_number||''}','${cert.issued_at||''}')">
+          <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--gold),var(--amber));display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0e1c2e" stroke-width="2.5"><path d="M12 15l-2 5L8 18l-5 2 2-5-3-3 5-1 3-5 3 5 5 1-3 3 2 5-3-2z"/></svg>
           </div>
-          ${e.progress_percent===100
-            ?`<button onclick="viewCertificate('${e.course_id}','${(e.courses?.title||'').replace(/'/g,"\\'")}'')" style="background:var(--gold-bg);color:var(--gold);border:1px solid rgba(245,168,0,.4);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0">Certificate</button>`
-            :`<button onclick="cm()" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0">Continue</button>`}
-        </div>`).join('')}`
-  } catch(err) { c.innerHTML=`<div style="color:var(--red);padding:16px">${err.message}</div>` }
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cert.courses?.title||'Course Certificate'}</div>
+            <div style="font-size:11px;color:var(--gold)">Issued ${cert.issued_at ? new Date(cert.issued_at).toLocaleDateString('en-KE',{year:'numeric',month:'short',day:'numeric'}) : 'Today'}</div>
+          </div>
+          <div style="font-size:11px;color:var(--gold);font-weight:700;flex-shrink:0">View →</div>
+        </div>
+      `).join('')}` : ''}
+      
+      <!-- Browse More CTA -->
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+        <a href="courses.html" onclick="cm()" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border2);color:var(--cyan);padding:10px 20px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none;transition:background .15s" onmouseover="this.style.background='var(--accent-bg)'" onmouseout="this.style.background='var(--surface)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg>
+          Browse More Courses
+        </a>
+      </div>
+    `
+  } catch(err) {
+    c.innerHTML = `<div style="padding:20px;color:var(--red);background:var(--red-bg);border-radius:12px;font-size:13px"><strong>Error loading dashboard:</strong> ${err.message}<br><small>Check your internet connection and try again.</small></div>`
+  }
 }
+
+function renderEnrollCard(e, mode) {
+  const title   = e.courses?.title || e.course_title || 'Course'
+  const cat     = e.courses?.category || e.course_category || 'General'
+  const prog    = Math.min(100, Math.max(0, e.progress_percent || 0))
+  const instrName = e.courses?.profiles?.full_name || ''
+  const done    = prog >= 100
+  const gradMap = {'Web Dev':'#60a5fa','Data Science':'#fbbf24','AI & ML':'#a78bfa','Cybersecurity':'#f87171','Mobile':'#34d399','Cloud':'#38bdf8','Blockchain':'#fb923c','DevOps':'#4ade80'}
+  const color   = gradMap[cat] || 'var(--cyan)'
+  return `<div style="display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
+    <div style="width:52px;height:52px;border-radius:12px;background:${color}22;border:1.5px solid ${color}40;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${instrName || cat}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:4px">
+        <span>${done ? '✅ Completed' : prog + '% complete'}</span>
+        <span style="color:${color};font-weight:700">${prog}%</span>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,.08);border-radius:100px;overflow:hidden">
+        <div style="height:100%;width:${prog}%;background:linear-gradient(90deg,${color},${color}99);border-radius:100px;transition:width .3s ease"></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+      ${done
+        ? `<button onclick="viewCertificate('${e.course_id||''}','${title.replace(/'/g,"\'")}','','')" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">🏆 Certificate</button>`
+        : `<button onclick="simulateProgress('${e.id||''}',${prog})" style="background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">▶ Continue</button>`}
+    </div>
+  </div>`
+}
+
+// Demo: simulate progress for testing
+async function simulateProgress(enrollId, currentPct) {
+  const newPct = Math.min(100, currentPct + 25)
+  if (db && enrollId && enrollId !== 'undefined') {
+    try {
+      const upd = { progress_percent: newPct, last_accessed: new Date().toISOString() }
+      if (newPct >= 100) upd.completed_at = new Date().toISOString()
+      await db.from('enrollments').update(upd).eq('id', enrollId)
+    } catch(e) {}
+  }
+  if (newPct >= 100) showToast('🏆 Course completed! Certificate issued!', 'success')
+  else showToast(`Progress updated: ${newPct}%`, 'success')
+  await loadDashboard()
+}
+
+
+// ── FREE COURSE ENROLLMENT ────────────────────────────────────────────────────
+async function doFreeEnroll(course) {
+  if (!currentUser) { openModal('signin'); return }
+  try {
+    if (db) {
+      const rec = { user_id: currentUser.id, status: 'active', progress_percent: 0,
+        enrolled_at: new Date().toISOString(), last_accessed: new Date().toISOString() }
+      if (course.id) rec.course_id = course.id
+      if (course.title) rec.course_title = course.title
+      await db.from('enrollments').upsert(rec)
+    }
+    // Also store locally for static courses
+    const localKey = 'aictn_enrollments_' + currentUser.id
+    let local = []
+    try { local = JSON.parse(localStorage.getItem(localKey) || '[]') } catch(e){}
+    if (!local.some(e => e.course_title === course.title)) {
+      local.push({ course_id: course.id || null, course_title: course.title,
+        course_category: course.category || 'General', progress_percent: 0,
+        status: 'active', enrolled_at: new Date().toISOString(), id: 'local_' + Date.now() })
+      localStorage.setItem(localKey, JSON.stringify(local))
+    }
+  } catch(e) { console.warn('Enrollment save:', e.message) }
+  cm()
+  showToast('🎉 Enrolled! Open My Learning to start your course.', 'success')
+}
+
 
 // ── INSTRUCTOR DASHBOARD ──────────────────────────────────────────────────────
 function openInstructorDash() { if (!currentUser){openModal('signin');return} openModal('instructor') }
@@ -1527,13 +1707,23 @@ function showToast(msg,type='info') {
   setTimeout(()=>t.remove(),3500)
 }
 function setupReveal() {
-  // Show elements already in viewport immediately, animate others on scroll
-  const obs=new IntersectionObserver(entries=>entries.forEach(e=>{
-    if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target)}
-  }),{threshold:0.04,rootMargin:'0px 0px -40px 0px'})
-  document.querySelectorAll('.reveal').forEach(el=>obs.observe(el))
-  // Safety fallback: if anything still hidden after 1.5s, force visible
-  setTimeout(()=>document.querySelectorAll('.reveal:not(.visible)').forEach(el=>el.classList.add('visible')),1500)
+  // Immediately show elements in current viewport (no waiting)
+  const showAll = () => document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'))
+  
+  // Use IntersectionObserver with rootMargin to pre-reveal before they scroll into view
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver(entries => entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target) }
+    }), { threshold: 0, rootMargin: '200px 0px 200px 0px' })
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el))
+    // Show all after 800ms regardless (prevents permanent gaps on slow pages)
+    setTimeout(showAll, 800)
+  } else {
+    // No IntersectionObserver support — show everything immediately
+    showAll()
+  }
+  // Double-safety: force show everything after 2s
+  setTimeout(showAll, 2000)
 }
 </script>
 </body>
