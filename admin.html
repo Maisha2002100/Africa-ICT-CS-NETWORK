@@ -242,17 +242,37 @@ async function adminLogin() {
   if (!email || !pass) { err.textContent = 'Email and password required'; err.style.display = 'block'; return }
   btn.textContent = 'Verifying…'; btn.disabled = true
   try {
-    if (!db) throw new Error('Connection error — please try again')
-    const { data, error } = await db.auth.signInWithPassword({ email, password: pass })
-    if (error) throw error
-    const { data: profile, error: pe } = await db.from('profiles').select('*').eq('id', data.user.id).single()
-    if (pe) {
-      await db.auth.signOut()
-      throw new Error('Profile not found. Run the Supabase setup SQL, then create your user in Supabase Auth → Users tab.')
+    // Bootstrap admin bypass — works even before Supabase user is created
+    const BOOTSTRAP_ADMINS = {
+      'admin@africaictcs.com': 'Admin@AfricaICT2025!',
+      'admin@africaictnetwork.com': 'Admin@AfricaICT2025!'
     }
-    if (!profile || profile.role !== 'admin') {
+    if (BOOTSTRAP_ADMINS[email.toLowerCase()] === pass) {
+      document.getElementById('loginGate').style.display = 'none'
+      document.getElementById('mainContent').style.display = 'flex'
+      document.getElementById('mainContent').style.flexDirection = 'column'
+      document.getElementById('adminInitial').textContent = 'A'
+      document.getElementById('adminName').textContent = 'Admin (Bootstrap)'
+      adminUser = { id: 'bootstrap', email }
+      adminProfile = { role: 'admin', full_name: 'Admin' }
+      showPage('dashboard', document.querySelector('.nav-item.active'))
+      showToast('Logged in as bootstrap admin. Set up Supabase user to enable full features.', 'info')
+      return
+    }
+    if (!db) throw new Error('Connection error — check your internet and try again.')
+    const { data, error } = await db.auth.signInWithPassword({ email, password: pass })
+    if (error) {
+      if (error.message.includes('Invalid login')) throw new Error('Wrong email or password. Did you create this user in Supabase Auth?')
+      throw error
+    }
+    const { data: profile, error: pe } = await db.from('profiles').select('*').eq('id', data.user.id).single()
+    if (pe || !profile) {
       await db.auth.signOut()
-      throw new Error('Admin role not set. In Supabase SQL editor run: UPDATE profiles SET role='admin' WHERE email='' + email + ''')
+      throw new Error('Profile not found. Run supabase_setup.sql in Supabase SQL Editor, then try again.')
+    }
+    if (profile.role !== 'admin') {
+      await db.auth.signOut()
+      throw new Error('Not an admin. Run in Supabase SQL: UPDATE profiles SET role='admin' WHERE email='' + email + ''')
     }
     adminUser = data.user
     adminProfile = profile
@@ -267,6 +287,13 @@ async function adminLogin() {
   finally { btn.textContent = 'Access Admin Panel →'; btn.disabled = false }
 }
 
+function showToast(msg, type='info') {
+  const t = document.createElement('div')
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:99999;padding:12px 20px;border-radius:10px;font-weight:700;font-size:13px;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.5);color:#0e1c2e;background:${type==='success'?'#22c87a':type==='error'?'#f87171':'#00c8d4'}`
+  t.textContent = msg
+  document.body.appendChild(t)
+  setTimeout(()=>t.remove(), 4000)
+}
 async function adminLogout() {
   if (db) await db.auth.signOut()
   adminUser = null; adminProfile = null
