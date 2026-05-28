@@ -280,6 +280,7 @@ a{color:inherit;text-decoration:none}button{font-family:inherit}
   .nav-inner{padding:0 16px;height:60px;gap:8px}
   .nav-search{display:none}
   .nav-link:not(.btn-ol):not(.btn-pn){display:none}
+  .btn-ol,.btn-pn{display:flex!important;align-items:center;padding:7px 14px!important;font-size:12px!important}
   .nav-logo-sub{display:none}
   .nav-logo-name{font-size:12px}
   /* ANNOUNCE */
@@ -541,6 +542,7 @@ body::before {
     <div class="sec-hd"><div class="sec-hd-row"><div><div class="sec-lbl">Featured</div><div class="sec-title">Top <em>Courses</em></div><div class="sec-sub">Expert-led courses built for African learners</div></div><a href="courses.html" class="see-all">View all 380+ →</a></div></div>
     <div class="topic-tabs" id="ctabs">
       <button class="tab active" onclick="filterCourses('All',this)">All</button>
+      <button class="tab" style="background:linear-gradient(135deg,rgba(56,189,248,.15),rgba(56,189,248,.05));border-color:rgba(56,189,248,.4);color:#38bdf8" onclick="filterCourses('Free',this)">🎁 Free</button>
       <button class="tab" onclick="filterCourses('Web Dev',this)">Web Dev</button>
       <button class="tab" onclick="filterCourses('Data Science',this)">Data Science</button>
       <button class="tab" onclick="filterCourses('AI & ML',this)">AI &amp; ML</button>
@@ -550,6 +552,19 @@ body::before {
       <button class="tab" onclick="filterCourses('Blockchain',this)">Blockchain</button>
     </div>
     <div class="courses-grid" id="cg">
+      <!-- FREE COURSES - Always Free, No Payment Required -->
+      <div class="course-card" data-cat="Web Dev" data-title="HTML & CSS for Absolute Beginners" data-price="0" onclick="openCourse(this)" style="border-color:rgba(56,189,248,.4)">
+        <div class="cc-thumb" style="background:linear-gradient(135deg,#0c4a6e,#0284c7)"><div class="cc-badge" style="background:#38bdf8;color:#012030">🎁 FREE</div><div class="cc-wish" onclick="event.stopPropagation();tw(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div><svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(56,189,248,0.6)" stroke-width="1.3" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+        <div class="cc-body"><span class="cc-cat">Web Dev</span><div class="cc-title">HTML &amp; CSS for Absolute Beginners</div><div class="cc-instr">Amara Diallo · Dakar Institute of Tech</div><div class="cc-stars"><span class="stars">★★★★★</span><span class="rn">4.9</span><span class="rc">(5,420)</span></div><div class="cc-meta"><span class="cc-meta-item"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>8 hrs</span><span class="cc-meta-item">40 lessons</span><span class="cc-meta-item">EN/SW</span></div><div class="cc-foot"><div><span class="cc-price" style="color:#38bdf8">FREE</span><span class="cc-old">KES 1,500</span></div><button class="cc-enroll" style="background:linear-gradient(135deg,#38bdf8,#0284c7);color:#012030" onclick="event.stopPropagation();startEnroll(null,'HTML & CSS for Absolute Beginners',0)">Enroll Free</button></div></div>
+      </div>
+      <div class="course-card" data-cat="Data Science" data-title="Introduction to Python Programming" data-price="0" onclick="openCourse(this)" style="border-color:rgba(167,139,250,.4)">
+        <div class="cc-thumb" style="background:linear-gradient(135deg,#3b0764,#7c3aed)"><div class="cc-badge" style="background:#a78bfa;color:#1a0a3a">🎁 FREE</div><div class="cc-wish" onclick="event.stopPropagation();tw(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div><svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(167,139,250,0.6)" stroke-width="1.3" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+        <div class="cc-body"><span class="cc-cat">Programming</span><div class="cc-title">Introduction to Python Programming</div><div class="cc-instr">Chinonso Okafor · Lagos Tech Hub</div><div class="cc-stars"><span class="stars">★★★★★</span><span class="rn">4.8</span><span class="rc">(7,890)</span></div><div class="cc-meta"><span class="cc-meta-item"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>10 hrs</span><span class="cc-meta-item">50 lessons</span><span class="cc-meta-item">EN</span></div><div class="cc-foot"><div><span class="cc-price" style="color:#a78bfa">FREE</span><span class="cc-old">KES 2,000</span></div><button class="cc-enroll" style="background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff" onclick="event.stopPropagation();startEnroll(null,'Introduction to Python Programming',0)">Enroll Free</button></div></div>
+      </div>
+      <div class="course-card" data-cat="Cybersecurity" data-title="Cybersecurity Fundamentals for Beginners" data-price="0" onclick="openCourse(this)" style="border-color:rgba(34,200,122,.4)">
+        <div class="cc-thumb" style="background:linear-gradient(135deg,#064e3b,#059669)"><div class="cc-badge" style="background:#22c87a;color:#012a1a">🎁 FREE</div><div class="cc-wish" onclick="event.stopPropagation();tw(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div><svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(34,200,122,0.6)" stroke-width="1.3" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div class="cc-body"><span class="cc-cat">Cybersecurity</span><div class="cc-title">Cybersecurity Fundamentals for Beginners</div><div class="cc-instr">Kwame Mensah · Accra Cyber Academy</div><div class="cc-stars"><span class="stars">★★★★★</span><span class="rn">4.9</span><span class="rc">(4,100)</span></div><div class="cc-meta"><span class="cc-meta-item"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>6 hrs</span><span class="cc-meta-item">30 lessons</span><span class="cc-meta-item">EN</span></div><div class="cc-foot"><div><span class="cc-price" style="color:#22c87a">FREE</span><span class="cc-old">KES 2,500</span></div><button class="cc-enroll" style="background:linear-gradient(135deg,#22c87a,#059669);color:#fff" onclick="event.stopPropagation();startEnroll(null,'Cybersecurity Fundamentals for Beginners',0)">Enroll Free</button></div></div>
+      </div>
       <div class="course-card" data-cat="Web Dev" data-title="Complete Full-Stack Web Development Bootcamp" data-price="1800" onclick="openCourse(this)">
         <div class="cc-thumb cc-icon-webdev"><div class="cc-badge badge-best">Bestseller</div><div class="cc-wish" onclick="event.stopPropagation();tw(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div><svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(96,165,250,0.5)" stroke-width="1.3" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
         <div class="cc-body"><span class="cc-cat">Web Dev</span><div class="cc-title">Complete Full-Stack Web Development Bootcamp</div><div class="cc-instr">Amara Diallo · Dakar Institute of Tech</div><div class="cc-stars"><span class="stars">★★★★★</span><span class="rn">4.9</span><span class="rc">(2,140)</span></div><div class="cc-meta"><span class="cc-meta-item"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>48 hrs</span><span class="cc-meta-item">220 lessons</span><span class="cc-meta-item">EN/SW</span></div><div class="cc-foot"><div><span class="cc-price">KES 1,800</span><span class="cc-old">KES 5,200</span></div><button class="cc-enroll" onclick="event.stopPropagation();startEnroll(null,'Complete Full-Stack Web Development Bootcamp',1800)">Enroll Now</button></div></div>
@@ -763,6 +778,8 @@ try {
 let currentUser = null, currentProfile = null, pendingCourse = null, pollInterval = null
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // IMMEDIATELY show all sections — no waiting for scroll
+  document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'))
   if (db) { await initAuth(); await loadCourses(); await loadAnnouncement(); subscribeRealtimeUpdates() }
   document.getElementById('si')?.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch() })
   setupReveal()
@@ -812,7 +829,14 @@ async function initAuth() {
     const { data: { session } } = await db.auth.getSession()
     if (session) { currentUser = session.user; await fetchProfile() }
     db.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) { currentUser = session.user; await fetchProfile(); updateNav() }
+      if (event === 'SIGNED_IN' && session) { 
+        currentUser = session.user; 
+        await fetchProfile(); 
+        updateNav()
+        // Auto-open dashboard after sign in
+        cm()
+        setTimeout(() => { openDashboard() }, 300)
+      }
       if (event === 'SIGNED_OUT') { currentUser = null; currentProfile = null; updateNav() }
     })
     updateNav()
@@ -852,7 +876,7 @@ function openModal(t) {
   else if (t === 'teach')     { document.getElementById('tM').style.display = 'block'; box.style.maxWidth = '480px' }
   else if (t === 'enroll')    { document.getElementById('eM').style.display = 'block'; box.style.maxWidth = '480px' }
   else if (t === 'payment')   { document.getElementById('payM').style.display = 'block'; box.style.maxWidth = '480px' }
-  else if (t === 'dashboard') { document.getElementById('dashM').style.display = 'block'; box.style.maxWidth = '680px'; loadDashboard() }
+  else if (t === 'dashboard') { document.getElementById('dashM').style.display = 'block'; box.style.maxWidth = '900px'; box.style.width='96vw'; loadDashboard() }
   else if (t === 'instructor'){ document.getElementById('instrM').style.display = 'block'; box.style.maxWidth = '680px'; loadInstructorDash() }
   else if (t === 'cert')      { document.getElementById('certM').style.display = 'block'; box.style.maxWidth = '560px' }
 }
@@ -896,7 +920,8 @@ async function doSignUp() {
       showErr('signupErr', 'This email is already registered. Please log in instead.')
       return
     }
-    showOk('signupErr', '✓ Account created! Check your email to confirm, then log in.')
+    showOk('signupErr', '🎉 Account created! Check your email, then log in.')
+    showToast('Welcome to Africa ICT! Please verify your email then log in.', 'success')
     setTimeout(() => { cm(); if (pendingCourse) setTimeout(() => openModal('enroll'), 400) }, 2800)
   } catch(err) {
     const msg = err.message || 'Unknown error'
@@ -1002,7 +1027,13 @@ async function filterCourses(cat, btn) {
   } catch(e) {}
   // Fallback: filter static cards
   document.querySelectorAll('#cg .course-card').forEach(c => {
-    c.style.display = (cat === 'All' || c.dataset.cat === cat) ? 'flex' : 'none'
+    const cardCat = c.dataset.cat || ''
+    const cardPrice = parseInt(c.dataset.price || '9999')
+    let show = false
+    if (cat === 'All') show = true
+    else if (cat === 'Free') show = cardPrice === 0
+    else show = cardCat === cat
+    c.style.display = show ? 'flex' : 'none'
   })
   if (btn) document.getElementById('courses').scrollIntoView({behavior:'smooth',block:'start'})
 }
@@ -1036,8 +1067,17 @@ function openCourse(card) {
 function startEnroll(courseId, title, price, fromDB) {
   pendingCourse = { id: courseId, title, price: Number(price), fromDB: !!fromDB }
   document.getElementById('sc').textContent = title
-  document.getElementById('sc_price').textContent = 'KES ' + Number(price).toLocaleString()
-  if (!currentUser) { showToast('Sign in to enroll in this course', 'info'); openModal('signin'); return }
+  document.getElementById('sc_price').textContent = Number(price) === 0 ? 'FREE' : 'KES ' + Number(price).toLocaleString()
+  if (!currentUser) { 
+    showToast('Sign in or create a free account to enroll', 'info')
+    openModal('signin')
+    return 
+  }
+  // Free courses: skip payment modal, enroll immediately
+  if (Number(price) === 0) {
+    doFreeEnroll(pendingCourse)
+    return
+  }
   openModal('enroll')
 }
 
@@ -1423,7 +1463,9 @@ async function doFreeEnroll(course) {
     }
   } catch(e) { console.warn('Enrollment save:', e.message) }
   cm()
-  showToast('🎉 Enrolled! Open My Learning to start your course.', 'success')
+  showToast('🎉 Enrolled in "' + (course.title||'course') + '"! Opening your dashboard…', 'success')
+  // Auto-open dashboard so user sees their enrolled course immediately
+  setTimeout(() => { openDashboard() }, 800)
 }
 
 
