@@ -1,6 +1,5 @@
 // api/pay.js — PayHero STK push + status polling proxy
 // Deploy to Vercel — solves CORS and keeps credentials server-side
-
 const PAYHERO_URL  = 'https://backend.payhero.co.ke/api/v2'
 const PAYHERO_AUTH = process.env.PAYHERO_AUTH ||
   'Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
