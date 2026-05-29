@@ -258,8 +258,14 @@ function showGate() {
   document.getElementById('gateScreen').style.display = 'flex'
   document.getElementById('mainLayout').style.display = 'none'
 }
-function gateSignup() { window.location.href = 'index.html?action=signup' }
-function gateSignin() { window.location.href = 'index.html?action=signin' }
+function gateSignup() {
+  const returnUrl = encodeURIComponent(location.href)
+  window.location.href = 'index.html?action=signup&returnUrl=' + returnUrl
+}
+function gateSignin() {
+  const returnUrl = encodeURIComponent(location.href)
+  window.location.href = 'index.html?action=signin&returnUrl=' + returnUrl
+}
 
 // ── SHOW COURSE ──────────────────────────────────────────────────────────
 function showCourse() {
