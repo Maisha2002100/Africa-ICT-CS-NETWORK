@@ -780,6 +780,10 @@ let currentUser = null, currentProfile = null, pendingCourse = null, pollInterva
 document.addEventListener('DOMContentLoaded', async () => {
   // IMMEDIATELY show all sections — no waiting for scroll
   document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'))
+  // Handle ?action=signup|signin from learn.html gate
+  const urlAction = new URLSearchParams(location.search).get('action')
+  if (urlAction === 'signup') setTimeout(() => openModal('signup'), 500)
+  if (urlAction === 'signin') setTimeout(() => openModal('signin'), 500)
   if (db) { await initAuth(); await loadCourses(); await loadAnnouncement(); subscribeRealtimeUpdates() }
   document.getElementById('si')?.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch() })
   setupReveal()
@@ -1259,7 +1263,7 @@ async function onPaySuccess(reference) {
     <div style="width:64px;height:64px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
     <div style="font-size:18px;font-weight:800;color:var(--white);margin-bottom:6px">Payment Successful!</div>
     <div style="color:var(--muted);margin-bottom:20px">You are now enrolled in <strong style="color:var(--white)">${pendingCourse.title}</strong></div>
-    <button class="modal-btn" onclick="cm();openDashboard()">Go to My Learning →</button>
+    <button class="modal-btn" onclick="cm();window.location.href='learn.html?id='+encodeURIComponent(pendingCourse?.id||'')+'&title='+encodeURIComponent(pendingCourse?.title||'Course')+'&action=enrolled'">Start Learning →</button>
   </div>`
   showToast('Enrolled successfully! 🎉', 'success')
 }
@@ -1420,7 +1424,7 @@ function renderEnrollCard(e, mode) {
     <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
       ${done
         ? `<button onclick="viewCertificate('${e.course_id||''}','${title.replace(/'/g,"\'")}','','')" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">🏆 Certificate</button>`
-        : `<button onclick="simulateProgress('${e.id||''}',${prog})" style="background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">▶ Continue</button>`}
+        : `<button onclick="window.location.href='learn.html?id='+encodeURIComponent('${e.course_id||''}')+'&title='+encodeURIComponent('${title.replace(/'/g,"'")}')" style="background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">▶ Continue</button>`}
     </div>
   </div>`
 }
