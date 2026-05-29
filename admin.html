@@ -272,7 +272,7 @@ async function adminLogin() {
     }
     if (profile.role !== 'admin') {
       await db.auth.signOut()
-      throw new Error('Not an admin. Run in Supabase SQL: UPDATE profiles SET role='admin' WHERE email='' + email + ''')
+      throw new Error(`Not an admin. Run in Supabase SQL: UPDATE profiles SET role='admin' WHERE email='` + email + `'`)
     }
     adminUser = data.user
     adminProfile = profile
