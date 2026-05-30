@@ -157,7 +157,7 @@ tr:hover td{background:var(--surface)}
     <button class="login-btn" onclick="adminLogin()" id="loginBtn">Access Admin Panel →</button>
     <div class="login-creds">
       <div>📧 <strong>Email:</strong> admin@africaictcs.com</div>
-      <div>🔑 <strong>Password:</strong> Admin@AfricaICT2025!</div>
+      <div>🔑 <strong>Password:</strong> @39582861</div>
       <div style="margin-top:6px;font-size:11px;color:var(--muted)">⚠️ Change this password after first login via Supabase Auth dashboard.</div>
     </div>
   </div>
@@ -244,8 +244,8 @@ async function adminLogin() {
   try {
     // Bootstrap admin bypass — works even before Supabase user is created
     const BOOTSTRAP_ADMINS = {
-      'admin@africaictcs.com': 'Admin@AfricaICT2025!',
-      'admin@africaictnetwork.com': 'Admin@AfricaICT2025!'
+      'admin@africaictcs.com': '@39582861',
+      'admin@africaictnetwork.com': '@39582861'
     }
     if (BOOTSTRAP_ADMINS[email.toLowerCase()] === pass) {
       document.getElementById('loginGate').style.display = 'none'
@@ -842,7 +842,7 @@ function renderSettings() {
         <div style="padding:20px">
           <p style="font-size:13px;color:var(--body);margin-bottom:12px">To initialise the database for the first time, copy and run this SQL in your <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--cyan)">Supabase SQL Editor</a>:</p>
           <div style="background:var(--navy3);border:1px solid var(--border);border-radius:9px;padding:14px;font-family:monospace;font-size:11px;color:var(--cyan);max-height:180px;overflow-y:auto;line-height:1.6">Project: https://oqkbcnnjudfhlizrqjeu.supabase.co — Already configured and live!</div>
-          <div style="margin-top:12px;font-size:13px;color:var(--body)"><strong style="color:var(--white)">Admin Login:</strong> admin@africaictcs.com | <strong style="color:var(--white)">Password:</strong> Admin@AfricaICT2025!<br/><span style="color:var(--muted);font-size:12px">After running setup SQL, create this user in Supabase Auth → Users, then UPDATE profiles SET role='admin' WHERE email='admin@africaictcs.com'</span></div>
+          <div style="margin-top:12px;font-size:13px;color:var(--body)"><strong style="color:var(--white)">Admin Login:</strong> admin@africaictcs.com | <strong style="color:var(--white)">Password:</strong> @39582861<br/><span style="color:var(--muted);font-size:12px">After running setup SQL, create this user in Supabase Auth → Users, then UPDATE profiles SET role='admin' WHERE email='admin@africaictcs.com'</span></div>
         </div>
       </div>
     </div>`
