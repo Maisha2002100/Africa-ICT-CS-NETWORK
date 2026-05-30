@@ -1759,20 +1759,34 @@ async function submitSecretAdmin() {
   if (!email||!pass) { err.textContent='Enter email and password'; err.style.display='block'; return }
   btn.textContent='Checking…'; btn.disabled=true; err.style.display='none'
   try {
+    // Bootstrap bypass — works without Supabase user setup
+    const BOOTSTRAP_ADMINS = {
+      'admin@africaictcs.com': '@39582861',
+      'admin@africaictnetwork.com': '@39582861'
+    }
+    if (BOOTSTRAP_ADMINS[email.toLowerCase()] === pass) {
+      closeSecretPanel()
+      window.location.href = 'admin.html'
+      return
+    }
+    // Supabase auth check
     if (!db) throw new Error('No connection')
     const { data, error } = await db.auth.signInWithPassword({ email, password: pass })
-    if (error) throw error
+    if (error) {
+      if (error.message.includes('Invalid login')) throw new Error('Wrong email or password.')
+      throw error
+    }
     const { data: profile } = await db.from('profiles').select('role').eq('id', data.user.id).single()
     if (!profile || profile.role !== 'admin') {
       await db.auth.signOut()
-      throw new Error(`Not an admin. Run in Supabase SQL: UPDATE profiles SET role='admin' WHERE email='` + email + `'`)
+      throw new Error('Access denied — this account does not have admin role.')
     }
     closeSecretPanel()
     window.location.href = 'admin.html'
   } catch(e) {
     err.textContent = e.message || 'Access denied'
     err.style.display = 'block'
-  } finally { btn.textContent='Access Admin Panel →'; btn.disabled=false }
+  } finally { btn.textContent='Enter Admin Panel →'; btn.disabled=false }
 }
 
 
@@ -1840,7 +1854,7 @@ function setupReveal() {
       Enter Admin Panel →
     </button>
     <div style="margin-top:16px;font-size:11px;color:#4e6e8e">
-      Role = admin required in Supabase profiles table
+      Tap logo 5× to open · Email: admin@africaictcs.com
     </div>
   </div>
 </div>
