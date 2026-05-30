@@ -831,20 +831,31 @@ async function loadAnnouncement() {
 async function initAuth() {
   try {
     const { data: { session } } = await db.auth.getSession()
-    if (session) { currentUser = session.user; await fetchProfile() }
+    if (session?.user) {
+      currentUser = session.user
+      await fetchProfile()
+      updateNav() // ← show "My Learning" immediately for already-logged-in users
+      // Auto-open dashboard if page was loaded after login redirect
+      const urlAction = new URLSearchParams(location.search).get('action')
+      if (urlAction === 'dashboard') setTimeout(() => openDashboard(), 400)
+    }
     db.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) { 
-        currentUser = session.user; 
-        await fetchProfile(); 
+      if (event === 'SIGNED_IN' && session?.user) {
+        currentUser = session.user
+        await fetchProfile()
         updateNav()
-        // Auto-open dashboard after sign in
-        cm()
-        setTimeout(() => { openDashboard() }, 300)
+        const retUrl = new URLSearchParams(location.search).get('returnUrl')
+        if (retUrl) { setTimeout(() => { window.location.href = decodeURIComponent(retUrl) }, 400); return }
+        setTimeout(() => openDashboard(), 350)
       }
       if (event === 'SIGNED_OUT') { currentUser = null; currentProfile = null; updateNav() }
+      if (event === 'TOKEN_REFRESHED' && session?.user) {
+        currentUser = session.user
+        updateNav()
+      }
     })
-    updateNav()
-  } catch(e) {}
+    updateNav() // fallback nav update
+  } catch(e) { console.warn('initAuth error:', e.message) }
 }
 
 async function fetchProfile() {
@@ -926,7 +937,12 @@ async function doSignUp() {
     }
     showOk('signupErr', '🎉 Account created! Check your email, then log in.')
     showToast('Welcome to Africa ICT! Please verify your email then log in.', 'success')
-    setTimeout(() => { cm(); if (pendingCourse) setTimeout(() => openModal('enroll'), 400) }, 2800)
+    setTimeout(() => { cm()
+        const _retUrlSU = new URLSearchParams(location.search).get('returnUrl')
+        if (_retUrlSU) { setTimeout(() => { window.location.href = decodeURIComponent(_retUrlSU) }, 500); return }
+        if (pendingCourse) { setTimeout(() => openModal('enroll'), 400); return }
+        setTimeout(() => openDashboard(), 400)
+      }, 2800)
   } catch(err) {
     const msg = err.message || 'Unknown error'
     if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')) {
@@ -1286,10 +1302,10 @@ function openDashboard() {
 async function loadDashboard() {
   const c = document.getElementById('dash_content')
   const greeting = document.getElementById('dash_greeting')
-  const name = (currentProfile?.full_name || 'Learner').split(' ')[0]
+  const name = (currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Learner').split(' ')[0]
   if (greeting) greeting.textContent = 'Welcome back, ' + name + '! 👋'
-  
-  if (!db || !currentUser) {
+
+  if (!currentUser) {
     c.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin:0 auto 12px;display:block;opacity:.3"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <div style="font-weight:700;color:var(--white);margin-bottom:8px">Sign in to see your courses</div>
@@ -1297,30 +1313,54 @@ async function loadDashboard() {
     </div>`
     return
   }
-  
+
   c.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)"><div style="width:28px;height:28px;border:3px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div>Loading your courses…</div>`
-  
+
   try {
-    // Load enrollments + any local enrollments stored in localStorage
     let enrollments = []
     let certs = []
-    
+
     if (db) {
-      const [eR, certR] = await Promise.all([
-        db.from('enrollments').select('*').eq('user_id', currentUser.id).eq('status', 'active').order('enrolled_at', {ascending: false}),
-        db.from('certificates').select('*').eq('user_id', currentUser.id)
-      ])
-      enrollments = eR.data || []
-      certs = certR.data || []
+      // Fetch enrollments — join courses table if possible, fallback gracefully
+      try {
+        const { data } = await db.from('enrollments')
+          .select('*, courses(id, title, category, slug, thumbnail_url)')
+          .eq('user_id', currentUser.id)
+          .eq('status', 'active')
+          .order('enrolled_at', { ascending: false })
+        enrollments = data || []
+      } catch(e) {
+        // Fallback: plain enrollments without join
+        try {
+          const { data } = await db.from('enrollments')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .eq('status', 'active')
+            .order('enrolled_at', { ascending: false })
+          enrollments = data || []
+        } catch(e2) { enrollments = [] }
+      }
+
+      // Certificates — table may not exist yet, handle gracefully
+      try {
+        const { data } = await db.from('certificates')
+          .select('*').eq('user_id', currentUser.id)
+        certs = data || []
+      } catch(e) { certs = [] }
     }
     
-    // Merge with any locally-tracked enrollments (for static courses)
+    // Merge with localStorage enrollments (static/free courses that aren't in DB)
     const localKey = 'aictn_enrollments_' + currentUser.id
     let localEnrollments = []
     try { localEnrollments = JSON.parse(localStorage.getItem(localKey) || '[]') } catch(e){}
-    // Merge: DB enrollments take priority
-    const dbIds = new Set(enrollments.map(e => e.course_id))
-    localEnrollments.forEach(le => { if (!dbIds.has(le.course_id)) enrollments.push(le) })
+    // DB enrollments take priority — merge by course_id AND course_title
+    const dbIds    = new Set(enrollments.map(e => e.course_id).filter(Boolean))
+    const dbTitles = new Set(enrollments.map(e => (e.courses?.title || e.course_title || '').toLowerCase()).filter(Boolean))
+    localEnrollments.forEach(le => {
+      const titleMatch = dbTitles.has((le.course_title || '').toLowerCase())
+      const idMatch    = le.course_id && dbIds.has(le.course_id)
+      if (!titleMatch && !idMatch) enrollments.push(le)
+    })
     
     const completed = enrollments.filter(e => e.progress_percent >= 100)
     const inProgress = enrollments.filter(e => e.progress_percent > 0 && e.progress_percent < 100)
@@ -1423,10 +1463,42 @@ function renderEnrollCard(e, mode) {
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
       ${done
-        ? `<button onclick="viewCertificate('${e.course_id||''}','${title.replace(/'/g,"\'")}','','')" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">🏆 Certificate</button>`
-        : `<button onclick="window.location.href='learn.html?id='+encodeURIComponent('${e.course_id||''}')+'&title='+encodeURIComponent('${title.replace(/'/g,"'")}')" style="background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">▶ Continue</button>`}
+        ? `<button onclick="openCertModal('${e.course_id||''}','${title.replace(/['"]/g,'').slice(0,40)}')" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">🏆 Certificate</button>`
+        : `<button onclick="goToLearn('${e.course_id||e.id||''}','${title.replace(/['"]/g,'').slice(0,40)}')" style="background:linear-gradient(135deg,var(--cyan),#0891b2);color:#0e1c2e;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">▶ Continue</button>`}
     </div>
   </div>`
+}
+
+// ── DASHBOARD HELPERS ────────────────────────────────────────────────────────
+function goToLearn(courseId, title) {
+  cm() // close modal
+  const id = courseId || 'free-html-css'
+  const t  = title || 'Course'
+  window.location.href = 'learn.html?id=' + encodeURIComponent(id) + '&title=' + encodeURIComponent(t)
+}
+function openCertModal(courseId, title) {
+  const name = (currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Learner')
+  const date = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+  const win  = window.open('', '_blank')
+  if (!win) { showToast('Allow pop-ups to view certificate', 'error'); return }
+  win.document.write(`<!DOCTYPE html><html><head><title>Certificate — ${title}</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@900&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap">
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0e1c2e;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:"Plus Jakarta Sans",sans-serif;padding:20px}
+  .c{background:linear-gradient(145deg,#112035,#162840);border:3px solid #f5a800;border-radius:24px;padding:60px;max-width:700px;width:100%;text-align:center;box-shadow:0 0 80px rgba(245,168,0,.12)}
+  h1{font-family:"Fraunces",serif;font-size:38px;color:#f5a800;margin-bottom:6px}.sub{color:#4e6e8e;font-size:12px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:36px}
+  .line{width:80px;height:2px;background:linear-gradient(90deg,#00c8d4,#f5a800);margin:0 auto 28px;border-radius:2px}.name{font-size:30px;font-weight:800;color:#f0f6ff;margin-bottom:16px}
+  .course{font-size:20px;font-weight:800;color:#00c8d4;margin-bottom:28px}.footer{display:flex;justify-content:space-between;border-top:1px solid rgba(0,200,212,.15);padding-top:24px;margin-top:8px}
+  .org{text-align:left;font-size:12px;color:#4e6e8e}.org strong{display:block;color:#f0f6ff;font-size:14px;margin-bottom:2px}
+  .issued{text-align:right;font-size:12px;color:#4e6e8e}.issued strong{display:block;color:#f0f6ff}
+  @media print{body{background:#0e1c2e!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
+  <body><div class="c"><h1>Certificate of Completion</h1><div class="sub">Africa ICT &amp; CS Network</div><div class="line"></div>
+  <p style="color:#8aa8c8;margin-bottom:12px;font-size:14px">This certifies that</p>
+  <div class="name">${name}</div><p style="color:#8aa8c8;margin:16px 0;font-size:14px">has successfully completed</p>
+  <div class="course">${title}</div>
+  <div class="footer"><div class="org"><strong>Africa ICT &amp; CS Network</strong>Empowering African Tech Talent</div>
+  <div class="issued"><strong>${date}</strong>Date Issued</div></div></div></body></html>`)
+  win.document.close()
+  setTimeout(() => win.print(), 600)
 }
 
 // Demo: simulate progress for testing
