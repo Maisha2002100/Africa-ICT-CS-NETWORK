@@ -61,7 +61,7 @@ a{color:inherit;text-decoration:none}button{font-family:inherit;cursor:pointer}
 .topbar-right{display:flex;align-items:center;gap:12px}
 .topbar-stat{font-size:12px;color:var(--muted);background:var(--surface);padding:5px 12px;border-radius:100px;border:1px solid var(--border)}
 .topbar-stat strong{color:var(--green);font-weight:700}
-.content{padding:28px;flex:1}
+.content{padding:28px;flex:1;overflow-y:auto;min-height:0}
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
 .stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:20px;position:relative;overflow:hidden;transition:border-color .2s}
 .stat-card:hover{border-color:var(--border2)}
@@ -700,10 +700,21 @@ async function renderApplications() {
               <td style="color:var(--white);font-weight:600">${a.profiles?.full_name||'—'}</td>
               <td style="font-size:12px">${a.profiles?.email||'—'}</td>
               <td>${a.expertise}</td>
-              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${a.bio||'—'}</td>
+              <td style="font-size:12px;max-width:200px">${(a.bio||'—').slice(0,120)}${a.bio&&a.bio.length>120?'…':''}</td>
               <td style="font-size:12px">${new Date(a.created_at).toLocaleDateString('en-KE')}</td>
               <td><span class="badge badge-${a.status==='approved'?'active':a.status==='rejected'?'failed':'pending'}">${a.status}</span></td>
-              <td>${a.status==='pending'?`<div style="display:flex;gap:5px"><button class="btn-sm btn-success" onclick="reviewApp('${a.id}','${a.user_id}','approved')">Approve</button><button class="btn-sm btn-danger" onclick="reviewApp('${a.id}','${a.user_id}','rejected')">Reject</button></div>`:`<span style="font-size:11px;color:var(--muted)">Reviewed</span>`}</td>
+              <td>${a.status==='pending'
+  ? `<div style="display:flex;gap:5px">
+      <button class="btn-sm btn-success" onclick="reviewApp('${a.id}','${a.user_id}','approved')">✓ Approve</button>
+      <button class="btn-sm btn-danger" onclick="reviewApp('${a.id}','${a.user_id}','rejected')">✗ Reject</button>
+    </div>`
+  : a.status==='approved'
+    ? `<div style="display:flex;gap:5px;align-items:center">
+        <span style="font-size:11px;color:var(--green)">✓ Approved</span>
+        <button class="btn-sm btn-secondary" onclick="viewInstructorProfile('${a.user_id}','${(a.profiles?.full_name||'').replace(/'/g,"\'")}')" title="View instructor profile">View</button>
+      </div>`
+    : `<span style="font-size:11px;color:var(--red)">✗ Rejected</span>`
+}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -714,11 +725,31 @@ async function renderApplications() {
 async function reviewApp(appId, userId, decision) {
   if (!confirm(`${decision==='approved'?'Approve':'Reject'} this instructor application?`)) return
   try {
-    await db.from('instructor_applications').update({ status:decision, reviewed_at:new Date().toISOString(), admin_note:`Reviewed by admin` }).eq('id', appId)
-    if (decision==='approved') await db.from('profiles').update({ role:'instructor', approved:true }).eq('id', userId)
-    toast(decision==='approved'?'✓ Approved — user is now an instructor on the platform!':'Application rejected','success')
+    await db.from('instructor_applications').update({
+      status: decision,
+      reviewed_at: new Date().toISOString(),
+      admin_note: `Reviewed by admin on ${new Date().toLocaleDateString('en-KE')}`
+    }).eq('id', appId)
+    if (decision === 'approved') {
+      const { error } = await db.from('profiles').update({
+        role: 'instructor', approved: true,
+        updated_at: new Date().toISOString()
+      }).eq('id', userId)
+      if (error) throw error
+      // Log the approval in site_settings for audit trail
+      try {
+        await db.from('site_settings').upsert({
+          key: 'last_instructor_approved',
+          value: userId,
+          updated_at: new Date().toISOString()
+        }, { onConflict:'key' })
+      } catch(e2) {}
+      toast('✓ Approved! The user is now an instructor. They can access the Instructor Dashboard.', 'success')
+    } else {
+      toast('Application rejected and user notified.', 'success')
+    }
     renderApplications()
-  } catch(e) { toast(e.message,'error') }
+  } catch(e) { toast('Error: ' + e.message, 'error') }
 }
 
 // ── CERTIFICATES ──────────────────────────────────────────────────────────────
@@ -815,7 +846,7 @@ async function saveHeroText() {
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 function renderSettings() {
   document.getElementById('pageContent').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px">
       <div class="section-card">
         <div class="sc-head"><div class="sc-title">Supabase Connection</div><span class="badge badge-active">Connected</span></div>
         <div style="padding:20px">
@@ -855,6 +886,65 @@ async function testPayhero() {
     if (res.ok) toast('✓ PayHero connection successful!','success')
     else toast(`PayHero responded with status ${res.status}`,'error')
   } catch(e) { toast(`Connection test failed: ${e.message}`,'error') }
+}
+
+// ── INSTRUCTOR PROFILE VIEWER ────────────────────────────────────────────────
+async function viewInstructorProfile(userId, name) {
+  try {
+    const [profR, coursesR, enrR] = await Promise.all([
+      db.from('instructor_applications').select('*').eq('user_id', userId).single(),
+      db.from('courses').select('id,title,category,price_kes,published,lesson_count').eq('instructor_id', userId),
+      db.from('enrollments').select('id,course_id').in('course_id',
+        (await db.from('courses').select('id').eq('instructor_id', userId)).data?.map(c=>c.id)||[]
+      )
+    ])
+    const app = profR.data || {}
+    const courses = coursesR.data || []
+    const enr = enrR.data || []
+    document.getElementById('modalContent').innerHTML = `
+      <div class="modal-title">Instructor: ${name}</div>
+      <div class="modal-sub">Approved instructor profile</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:16px 0">
+        <div style="background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:var(--cyan)">${courses.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Courses</div>
+        </div>
+        <div style="background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:var(--gold)">${courses.filter(c=>c.published).length}</div>
+          <div style="font-size:11px;color:var(--muted)">Published</div>
+        </div>
+        <div style="background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:var(--green)">${enr.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Students</div>
+        </div>
+      </div>
+      <div style="background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Expertise</div>
+        <div style="color:var(--white);font-weight:600">${app.expertise||'—'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:4px">Bio</div>
+        <div style="font-size:13px;color:var(--body);line-height:1.6">${app.bio||'—'}</div>
+      </div>
+      ${courses.length > 0 ? `
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Their Courses</div>
+      <div style="max-height:180px;overflow-y:auto">
+        ${courses.map(c=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--navy3);border-radius:8px;margin-bottom:6px">
+          <div>
+            <div style="font-size:13px;color:var(--white);font-weight:600">${c.title}</div>
+            <div style="font-size:11px;color:var(--muted)">${c.category} · ${c.lesson_count||0} lessons</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;color:var(--gold);font-weight:700">KES ${Number(c.price_kes).toLocaleString()}</div>
+            <span style="font-size:10px" class="badge badge-${c.published?'active':'draft'}">${c.published?'Live':'Draft'}</span>
+          </div>
+        </div>`).join('')}
+      </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">No courses yet</div>'}
+      <div class="modal-footer">
+        <button class="btn-sm btn-danger" onclick="changeRole('${userId}','learner','${name}');closeModal()">Revoke Instructor</button>
+        <button class="btn-sm btn-secondary" onclick="closeModal()">Close</button>
+      </div>`
+    openModal()
+  } catch(e) { toast('Error loading profile: ' + e.message, 'error') }
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
