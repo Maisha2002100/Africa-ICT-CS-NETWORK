@@ -50,14 +50,14 @@ a{color:inherit;text-decoration:none}button{font-family:inherit;cursor:pointer}
 .cat-sec-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .cat-sec-title{font-family:"Fraunces",serif;font-size:18px;font-weight:900;color:var(--white)}.cat-sec-sub{font-size:11px;color:var(--muted)}
 .view-all-btn{font-size:12px;font-weight:700;color:var(--cyan);border:1.5px solid var(--border2);padding:5px 14px;border-radius:8px;background:transparent;transition:background .15s;white-space:nowrap}.view-all-btn:hover{background:var(--accent-bg)}
-.courses-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:14px}
-.course-card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .2s,transform .15s,box-shadow .2s;display:flex;flex-direction:column}
+.courses-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.course-card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .2s,transform .15s,box-shadow .2s;display:flex;flex-direction:column;height:100%}
 .course-card:hover{border-color:var(--border2);transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,.3)}
 .cc-thumb{height:128px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .cc-badge{position:absolute;top:8px;left:8px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px}
 .b-best{background:rgba(245,168,0,.15);border:1px solid rgba(245,168,0,.4);color:#f5a800}.b-pop{background:rgba(0,200,212,.12);border:1px solid rgba(0,200,212,.35);color:#00c8d4}.b-new{background:rgba(34,200,122,.12);border:1px solid rgba(34,200,122,.35);color:#22c87a}.b-free{background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.35);color:#a78bfa}.b-hot{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#f87171}
 .cc-wish{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(14,28,46,.75);border:none;color:var(--body);display:flex;align-items:center;justify-content:center;transition:all .15s}.cc-wish:hover{color:var(--red)}
-.cc-body{padding:12px 13px 13px;flex:1;display:flex;flex-direction:column}
+.cc-body{padding:12px 13px 13px;flex:1;display:flex;flex-direction:column;flex-grow:1;display:flex;flex-direction:column}
 .cc-cat-tag{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--cyan);margin-bottom:4px}
 .cc-title{font-size:12.5px;font-weight:700;color:var(--white);line-height:1.4;margin-bottom:4px;flex:1}
 .cc-instr{font-size:11px;color:var(--muted);margin-bottom:4px}
@@ -151,7 +151,7 @@ a{color:inherit;text-decoration:none}button{font-family:inherit;cursor:pointer}
   .page-wrap{padding:0 14px}
   .body-grid{padding:16px 0 32px}
   /* Courses grid */
-  .courses-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .courses-grid{grid-template-columns:repeat(2,1fr);gap:12px}
   .cat-sec-title{font-size:16px}
   /* Sort bar */
   .main-top{flex-direction:column;align-items:flex-start;gap:8px}
@@ -186,7 +186,7 @@ a{color:inherit;text-decoration:none}button{font-family:inherit;cursor:pointer}
 
 /* Small mobile (≤420px) */
 @media(max-width:420px){
-  .courses-grid{grid-template-columns:1fr}
+  .courses-grid{grid-template-columns:1fr;gap:10px}
   .cc-thumb{height:130px}
   .cc-title{font-size:13px}
   .nav-logo-name{font-size:12px}
@@ -619,7 +619,26 @@ async function doFreeEnroll(c){
   closeDetail()
   showToast('🎉 Enrolled! Opening course now…','success')
   setTimeout(() => {
-    window.location.href = 'learn.html?id=' + encodeURIComponent(c.id||'free-html-css') + '&title=' + encodeURIComponent(c.title||'Course') + '&action=enrolled'
+    // Map category to a content key that has rich lesson content
+    const catMap = {
+      'Web Dev':'web-html-css-beginners','Data Science':'py-beginners',
+      'AI & ML':'ai-fundamentals','Cybersecurity':'cyber-fundamentals',
+      'UI/UX Design':'ux-figma-beginners','Mobile':'flutter-beginners',
+      'Cloud':'web-html-css-beginners','DevOps':'web-html-css-beginners',
+      'Databases':'da-sql-bootcamp','Networking':'cyber-fundamentals',
+      'Blockchain':'ai-fundamentals','Telecoms':'digi-basics',
+      'Digital Literacy':'digi-basics'
+    }
+    // Use course's own slug/id if it's a real content key, else map by category
+    const knownIds = ['web-html-css-beginners','py-beginners','cyber-fundamentals',
+      'ai-fundamentals','ux-figma-beginners','flutter-beginners','da-sql-bootcamp',
+      'digi-basics','free-html-css','free-python-intro','free-cybersec',
+      'free-001','free-002','free-003','free-004']
+    const contentId = knownIds.includes(c.id) ? c.id : (catMap[c.cat] || 'web-html-css-beginners')
+    window.location.href = 'learn.html?id=' + encodeURIComponent(contentId)
+      + '&title=' + encodeURIComponent(c.title||'Course')
+      + '&cat=' + encodeURIComponent(c.cat||'')
+      + '&action=enrolled'
   }, 900)
 }
 
@@ -749,7 +768,7 @@ function pollPayStatus(ref,ti){
   },5000)
 }
 function showPaySuccess(){
-  document.getElementById('payWait').innerHTML=`<div style="text-align:center;padding:12px 0"><div style="width:60px;height:60px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:17px;font-weight:800;color:var(--white);margin-bottom:4px">🎉 Payment Successful!</div><div style="font-size:13px;color:var(--muted);margin-bottom:6px">You're enrolled in</div><div style="font-size:14px;font-weight:700;color:var(--cyan);margin-bottom:18px">${pendingCourse.title}</div><div style="display:flex;gap:10px;justify-content:center"><button onclick="closePay();window.location.href='learn.html?id='+encodeURIComponent(pendingCourse?.id||'')+'&title='+encodeURIComponent(pendingCourse?.title||'Course')+'&action=enrolled'" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;font-size:13px;font-weight:800;padding:10px 22px;border-radius:9px;border:none;cursor:pointer;font-family:inherit">Start Learning →</button></div></div>`
+  document.getElementById('payWait').innerHTML=`<div style="text-align:center;padding:12px 0"><div style="width:60px;height:60px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:17px;font-weight:800;color:var(--white);margin-bottom:4px">🎉 Payment Successful!</div><div style="font-size:13px;color:var(--muted);margin-bottom:6px">You're enrolled in</div><div style="font-size:14px;font-weight:700;color:var(--cyan);margin-bottom:18px">${pendingCourse.title}</div><div style="display:flex;gap:10px;justify-content:center"><button onclick="closePay();(function(){const catMap={'Web Dev':'web-html-css-beginners','Data Science':'py-beginners','AI & ML':'ai-fundamentals','Cybersecurity':'cyber-fundamentals','UI/UX Design':'ux-figma-beginners','Mobile':'flutter-beginners','Databases':'da-sql-bootcamp','Digital Literacy':'digi-basics'};const knownIds=['web-html-css-beginners','py-beginners','cyber-fundamentals','ai-fundamentals','ux-figma-beginners','flutter-beginners','da-sql-bootcamp','digi-basics'];const cid=pendingCourse?.id||'';const cat=pendingCourse?.cat||'';const id=knownIds.includes(cid)?cid:(catMap[cat]||'web-html-css-beginners');window.location.href='learn.html?id='+encodeURIComponent(id)+'&title='+encodeURIComponent(pendingCourse?.title||'Course')+'&cat='+encodeURIComponent(cat)+'&action=enrolled'})()" style="background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;font-size:13px;font-weight:800;padding:10px 22px;border-radius:9px;border:none;cursor:pointer;font-family:inherit">Start Learning →</button></div></div>`
   toast('🎉 Enrolled successfully!','success')
 }
 function showPayFailed(){
@@ -851,7 +870,7 @@ function toast(msg,type='info'){
     <div style="text-align:left;margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Admin Email</label><input id="s_email" type="email" value="admin@africaictcs.com" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
     <div style="text-align:left;margin-bottom:6px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Password</label><input id="s_pass" type="password" placeholder="Admin password" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
     <div style="font-size:11px;color:#4e6e8e;margin-bottom:18px;text-align:right;cursor:pointer" onclick="document.getElementById('credHint').style.display=document.getElementById('credHint').style.display==='none'?'block':'none'">Show credentials hint</div>
-    <div id="credHint" style="display:none;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;text-align:left;font-size:12px;line-height:1.8;color:#8aa8c8">📧 <span style="color:#f0f6ff">admin@africaictcs.com</span><br>🔑 <span style="color:#f0f6ff">Admin@AfricaICT2025!</span></div>
+    <div id="credHint" style="display:none;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;text-align:left;font-size:12px;line-height:1.8;color:#8aa8c8">📧 <span style="color:#f0f6ff">admin@africaictcs.com</span><br>🔑 <span style="color:#f0f6ff">@39582861</span></div>
     <button id="secretLoginBtn" onclick="doSecretLogin()" style="width:100%;background:linear-gradient(135deg,#f5a800,#e07800);color:#0e1c2e;font-size:14px;font-weight:800;padding:13px;border-radius:10px;border:none;cursor:pointer;font-family:inherit">Access Admin Panel →</button>
     <div style="margin-top:14px;font-size:11px;color:#4e6e8e">🔒 Hidden access — tap logo 6 times</div>
   </div>
