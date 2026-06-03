@@ -882,7 +882,7 @@ async function initAuth() {
 }
 
 async function fetchProfile() {
-  try { const { data } = await db.from('profiles').select('*').eq('id', currentUser.id).single(); currentProfile = data } catch(e) {}
+  try { const { data } = await db.from('profiles').select('*').eq('id', currentUser?.id).single(); currentProfile = data } catch(e) {}
 }
 
 function updateNav() {
@@ -962,7 +962,7 @@ async function doSignUp() {
     if (data?.user?.id && db) {
       try {
         await db.from('profiles').upsert({
-          id: data.user.id,
+          id: data?.user?.id,
           email: email,
           full_name: name,
           role: 'learner',
@@ -1148,12 +1148,12 @@ async function proceedToPayment() {
   if (!pendingCourse) return
   btn.textContent = 'Checking…'; btn.disabled = true
   try {
-    if (db && pendingCourse.id && pendingCourse.fromDB) {
-      const { data: existing } = await db.from('enrollments').select('id').eq('user_id', currentUser.id).eq('course_id', pendingCourse.id).single()
+    if (db && pendingCourse?.id && pendingCourse.fromDB) {
+      const { data: existing } = await db.from('enrollments').select('id').eq('user_id', currentUser?.id).eq('course_id', pendingCourse?.id).single()
       if (existing) { cm(); showToast('You are already enrolled in this course!', 'success'); btn.textContent='Proceed to Payment →';btn.disabled=false; return }
     }
     // FREE COURSE: enroll instantly, no payment needed
-    if (pendingCourse.price === 0) {
+    if ((pendingCourse?.price||0) === 0) {
       btn.textContent = 'Enrolling…'
       await doFreeEnroll(pendingCourse)
       btn.textContent = 'Proceed to Payment →'; btn.disabled = false
@@ -1162,7 +1162,7 @@ async function proceedToPayment() {
   } catch(e) {}
   openModal('payment')
   document.getElementById('pay_course_name').textContent = pendingCourse.title
-  document.getElementById('pay_amount').textContent = 'KES ' + Number(pendingCourse.price).toLocaleString()
+  document.getElementById('pay_amount').textContent = 'KES ' + Number(pendingCourse?.price||0).toLocaleString()
   document.getElementById('pay_form').style.display = 'block'
   document.getElementById('pay_waiting').style.display = 'none'
   btn.textContent = 'Proceed to Payment →'; btn.disabled = false
@@ -1182,7 +1182,7 @@ async function initiatePayment() {
 
   const reference = `AICTN-${(currentUser?.id||'GS').slice(0,8).toUpperCase()}-${Date.now()}`
   const payload = {
-    amount: pendingCourse.price,
+    amount: pendingCourse?.price||0,
     phone_number: normPhone,
     channel_id: PAYHERO_CHANNEL,
     provider,
@@ -1251,12 +1251,12 @@ async function initiatePayment() {
   if (db && currentUser) {
     try {
       const rec = {
-        user_id: currentUser.id, amount: pendingCourse.price,
+        user_id: currentUser?.id, amount: pendingCourse?.price||0,
         phone: normPhone, provider, reference,
         payhero_ref: result.reference || result.CheckoutRequestID || result.MerchantRequestID || '',
         status: 'pending'
       }
-      if (pendingCourse.id && pendingCourse.fromDB) rec.course_id = pendingCourse.id
+      if (pendingCourse?.id && pendingCourse.fromDB) rec.course_id = pendingCourse?.id
       await db.from('payments').insert(rec)
     } catch(e) { console.warn('Payment record:', e.message) }
   }
@@ -1271,7 +1271,7 @@ async function initiatePayment() {
       </div>
       <div style="font-size:17px;font-weight:800;color:var(--white);margin-bottom:8px">STK Push Sent! 📲</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Check your phone <strong style="color:var(--cyan)">${normPhone}</strong></div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Enter your M-Pesa PIN to complete payment of <strong style="color:var(--gold)">KES ${Number(pendingCourse.price).toLocaleString()}</strong></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Enter your M-Pesa PIN to complete payment of <strong style="color:var(--gold)">KES ${Number(pendingCourse?.price||0).toLocaleString()}</strong></div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);margin-bottom:16px">
         <strong style="color:var(--white)">Reference:</strong> ${reference}
       </div>
@@ -1313,7 +1313,7 @@ function pollPaymentStatus(reference) {
 async function onPaySuccess(reference) {
   if (db && currentUser && pendingCourse?.id) {
     await db.from('payments').update({status:'completed',completed_at:new Date().toISOString()}).eq('reference',reference)
-    await db.from('enrollments').upsert({user_id:currentUser.id,course_id:pendingCourse.id,status:'active',progress_percent:0,enrolled_at:new Date().toISOString()},{onConflict:'user_id,course_id'})
+    await db.from('enrollments').upsert({user_id:currentUser?.id,course_id:pendingCourse?.id,status:'active',progress_percent:0,enrolled_at:new Date().toISOString()},{onConflict:'user_id,course_id'})
   }
   document.getElementById('pay_waiting').innerHTML = `<div style="text-align:center;padding:20px">
     <div style="width:64px;height:64px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
@@ -1365,7 +1365,7 @@ async function loadDashboard() {
       try {
         const { data } = await db.from('enrollments')
           .select('*, courses(id, title, category, slug, thumbnail_url)')
-          .eq('user_id', currentUser.id)
+          .eq('user_id', currentUser?.id)
           .eq('status', 'active')
           .order('enrolled_at', { ascending: false })
         enrollments = data || []
@@ -1374,7 +1374,7 @@ async function loadDashboard() {
         try {
           const { data } = await db.from('enrollments')
             .select('*')
-            .eq('user_id', currentUser.id)
+            .eq('user_id', currentUser?.id)
             .eq('status', 'active')
             .order('enrolled_at', { ascending: false })
           enrollments = data || []
@@ -1384,13 +1384,13 @@ async function loadDashboard() {
       // Certificates — table may not exist yet, handle gracefully
       try {
         const { data } = await db.from('certificates')
-          .select('*').eq('user_id', currentUser.id)
+          .select('*').eq('user_id', currentUser?.id)
         certs = data || []
       } catch(e) { certs = [] }
     }
     
     // Merge with localStorage enrollments (static/free courses that aren't in DB)
-    const localKey = 'aictn_enrollments_' + currentUser.id
+    const localKey = 'aictn_enrollments_' + currentUser?.id
     let localEnrollments = []
     try { localEnrollments = JSON.parse(localStorage.getItem(localKey) || '[]') } catch(e){}
     // DB enrollments take priority — merge by course_id AND course_title
@@ -1543,7 +1543,7 @@ function renderDashProfile() {
   const country = currentProfile?.country || 'Kenya'
   const role    = currentProfile?.role || 'learner'
   const joined  = currentProfile?.created_at
-    ? new Date(currentProfile.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})
+    ? new Date(currentProfile?.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})
     : 'Recently'
   const initials = name.slice(0,2).toUpperCase()
   c.innerHTML = `
@@ -1580,7 +1580,7 @@ async function saveProfile() {
   try {
     const { error } = await db.from('profiles').update({
       full_name: name, country, updated_at: new Date().toISOString()
-    }).eq('id', currentUser.id)
+    }).eq('id', currentUser?.id)
     if (error) throw error
     if (currentProfile) { currentProfile.full_name = name; currentProfile.country = country }
     showToast('Profile updated! ✓', 'success')
@@ -1625,17 +1625,17 @@ async function simulateProgress(enrollId, currentPct) {
 
 // ── FREE COURSE ENROLLMENT ────────────────────────────────────────────────────
 async function doFreeEnroll(course) {
-  if (!currentUser || !currentUser.id) { openModal('signin'); return }
+  if (!currentUser || !currentUser?.id) { openModal('signin'); return }
   try {
     if (db) {
-      const rec = { user_id: currentUser.id, status: 'active', progress_percent: 0,
+      const rec = { user_id: currentUser?.id, status: 'active', progress_percent: 0,
         enrolled_at: new Date().toISOString(), last_accessed: new Date().toISOString() }
       if (course.id) rec.course_id = course.id
       if (course.title) rec.course_title = course.title
       await db.from('enrollments').upsert(rec)
     }
     // Also store locally for static courses
-    const localKey = 'aictn_enrollments_' + currentUser.id
+    const localKey = 'aictn_enrollments_' + currentUser?.id
     let local = []
     try { local = JSON.parse(localStorage.getItem(localKey) || '[]') } catch(e){}
     if (!local.some(e => e.course_title === course.title)) {
@@ -1673,7 +1673,7 @@ async function loadInstructorDash() {
   if (!db||!currentUser){c.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">Sign in to manage courses</div>';return}
   try {
     const [cR,pR] = await Promise.all([
-      db.from('courses').select('*,enrollments(count)').eq('instructor_id',currentUser.id).order('created_at',{ascending:false}),
+      db.from('courses').select('*,enrollments(count)').eq('instructor_id',currentUser?.id).order('created_at',{ascending:false}),
       db.from('payments').select('amount').eq('status','completed')
     ])
     const courses = cR.data||[], payments = pR.data||[]
@@ -1719,7 +1719,7 @@ async function createCourse() {
   if (!title) { errEl.textContent='Title is required'; errEl.style.display='block'; return }
   errEl.style.display='none'
   try {
-    const { error } = await db.from('courses').insert({ instructor_id:currentUser.id, title, category:cat, price_kes:price, description:desc, published:false })
+    const { error } = await db.from('courses').insert({ instructor_id:currentUser?.id, title, category:cat, price_kes:price, description:desc, published:false })
     if (error) throw error
     showToast('Course created!', 'success'); loadInstructorDash()
   } catch(e) { errEl.textContent=e.message; errEl.style.display='block' }
@@ -1854,7 +1854,7 @@ async function submitSecretAdmin() {
       if (error.message.includes('Invalid login')) throw new Error('Wrong email or password.')
       throw error
     }
-    const { data: profile } = await db.from('profiles').select('role').eq('id', data.user.id).single()
+    const { data: profile } = await db.from('profiles').select('role').eq('id', data?.user?.id).single()
     if (!profile || profile.role !== 'admin') {
       await db.auth.signOut()
       throw new Error('Access denied — this account does not have admin role.')
