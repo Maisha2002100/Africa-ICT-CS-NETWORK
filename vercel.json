@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "installCommand": null,
+  "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "routes": [
+    { "src": "/api/pay",          "dest": "/api/pay.js" },
+    { "src": "/api/pay-callback", "dest": "/api/pay-callback.js" },
+    { "src": "/",                 "dest": "/index.html" },
+    { "src": "/courses",          "dest": "/courses.html" },
+    { "src": "/learn",            "dest": "/learn.html" },
+    { "src": "/admin",            "dest": "/admin.html" },
+    { "src": "/instructor",       "dest": "/instructor.html" },
+    { "src": "/(.*)\\.html",      "dest": "/$1.html" },
+    { "src": "/(.*)",             "dest": "/$1" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "SAMEORIGIN" },
+        { "key": "X-XSS-Protection",       "value": "1; mode=block" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin",  "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type,Authorization" }
+      ]
+    }
+  ]
+}
