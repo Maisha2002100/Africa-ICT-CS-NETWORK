@@ -720,14 +720,14 @@ async function initiatePayment(){
     try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
   let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-callback'}
   const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
   // Attempt 1: Vercel proxy — runs server-side, bypasses CORS & domain allowlist
   try{
-    const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
     const d=await r.json()
     if(!r.ok||d.error)throw new Error(d.error||d.message||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
@@ -803,7 +803,7 @@ function pollPayStatus(ref,ti){
       let data={}
       // Try Vercel proxy first for status check
       try{
-        const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+encodeURIComponent(ref))
+        const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference='+encodeURIComponent(ref))
         if(r.ok)data=await r.json()
       }catch(pe){
         // Fall back to direct PayHero
