@@ -1191,52 +1191,58 @@ async function initiatePayment() {
   }
 
   let result = null
+  let lastErr = ''
 
-  // ── ATTEMPT 1: Direct PayHero API (works when CORS is allowed by PayHero)
+  // ── ATTEMPT 1: Vercel backend proxy (most reliable — bypasses CORS & domain allowlist)
   try {
-    const r = await fetch(`${PAYHERO_URL}/payments`, {
+    const r = await fetch('https://africa-ictcs-api.vercel.app/api/pay', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: payload.amount, phone_number: normPhone, provider, external_reference: reference })
     })
-    result = await r.json()
-    if (!r.ok) throw new Error(result?.message || result?.detail || `PayHero error ${r.status}`)
-  } catch(directErr) {
-    console.warn('Direct PayHero failed:', directErr.message, '— trying proxy…')
+    const d = await r.json()
+    if (!r.ok || d.error) throw new Error(d.error || d.message || `Proxy error ${r.status}`)
+    result = d
+    console.log('✅ Payment via Vercel proxy')
+  } catch(proxyErr) {
+    lastErr = proxyErr.message
+    console.warn('Vercel proxy failed:', proxyErr.message, '— trying direct…')
 
-    // ── ATTEMPT 2: Vercel backend proxy (deploy api/pay.js to Vercel)
+    // ── ATTEMPT 2: Direct PayHero API (works if PayHero allowlist includes the domain)
     try {
-      const r = await fetch('https://africa-ictcs-api.vercel.app/api/pay', {
+      const r = await fetch(`${PAYHERO_URL}/payments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: payload.amount, phone_number: normPhone, provider, external_reference: reference })
+        headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
+        body: JSON.stringify(payload)
       })
-      result = await r.json()
-      if (!r.ok) throw new Error(result?.error || result?.message || `Proxy error ${r.status}`)
-    } catch(proxyErr) {
-      console.warn('Vercel proxy failed:', proxyErr.message, '— trying cors-anywhere…')
+      const d = await r.json()
+      if (!r.ok) throw new Error(d?.message || d?.detail || `PayHero error ${r.status}`)
+      result = d
+      console.log('✅ Payment via direct PayHero')
+    } catch(directErr) {
+      lastErr = directErr.message
+      console.warn('Direct PayHero failed:', directErr.message, '— trying allorigins…')
 
-      // ── ATTEMPT 3: cors-anywhere proxy (last resort)
+      // ── ATTEMPT 3: allorigins proxy (last resort for CORS blocked environments)
       try {
-        const corsProxy = 'https://corsproxy.io/?' + encodeURIComponent(`${PAYHERO_URL}/payments`)
-        const r = await fetch(corsProxy, {
+        const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(`${PAYHERO_URL}/payments`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
           body: JSON.stringify(payload)
         })
-        result = await r.json()
-        if (!r.ok) throw new Error(result?.message || `CORS proxy error ${r.status}`)
+        const d = await r.json()
+        if (d?.error || d?.message?.toLowerCase().includes('error')) throw new Error(d?.message || 'allorigins error')
+        result = d
+        console.log('✅ Payment via allorigins')
       } catch(proxy2Err) {
-        // All attempts failed — show helpful error
-        const msg = directErr.message || ''
-        let friendly = '❌ Payment failed. Please try again.'
-        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('CORS')) {
-          friendly = '❌ Network error. Check your internet connection and try again.'
-        } else if (msg.includes('401') || msg.includes('Unauthorized')) {
-          friendly = '❌ Payment service error. Please contact support.'
-        } else if (msg.includes('400') || msg.includes('allowlist') || msg.includes('domain')) {
-          friendly = '❌ Payment service is being configured. Please try again in a moment or contact support.'
-        } else if (msg.includes('timeout') || msg.includes('Timeout')) {
+        lastErr = proxy2Err.message
+        // All 3 attempts failed
+        let friendly = '❌ Payment failed. Please try again in a moment.'
+        if (lastErr.includes('Failed to fetch') || lastErr.includes('NetworkError') || lastErr.includes('network')) {
+          friendly = '❌ Network error. Please check your internet connection and try again.'
+        } else if (lastErr.includes('401') || lastErr.includes('Unauthorized')) {
+          friendly = '❌ Payment authentication error. Please contact support.'
+        } else if (lastErr.includes('timeout') || lastErr.includes('Timeout')) {
           friendly = '❌ Request timed out. Check your internet and try again.'
         }
         btn.textContent = 'Pay Now →'; btn.disabled = false
@@ -1304,7 +1310,7 @@ function pollPaymentStatus(reference) {
         } catch(e2) { data = {} }
       }
       const status = (data.status||data.Status||'').toLowerCase()
-      if (status==='success'||status==='0'||data.ResultCode==='0') { clearInterval(pollInterval); await onPaySuccess(reference) }
+      if (status==='completed'||status==='success'||status==='0'||data.ResultCode==='0') { clearInterval(pollInterval); await onPaySuccess(reference) }
       else if (status==='failed'||status==='cancelled') { clearInterval(pollInterval); onPayFailed() }
       else if (attempts>=24) { clearInterval(pollInterval); document.getElementById('pay_waiting').innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)"><p style="margin-bottom:12px">Payment timeout. If you paid, your enrollment will be processed automatically.</p><button class="modal-btn" onclick="cm()">Close</button></div>' }
     } catch(e) {}
