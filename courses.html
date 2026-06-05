@@ -720,16 +720,16 @@ async function initiatePayment(){
     try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
   let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africaictnetwork.online/api/pay-callback'}
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
   const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
-  // Attempt 1: Vercel proxy (server-side, no domain restriction)
+  // Attempt 1: Vercel proxy — runs server-side, bypasses CORS & domain allowlist
   try{
-    const r=await fetch('https://africa-ictcs-api.vercel.app/api/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
+    const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
     const d=await r.json()
-    if(!r.ok||d.error)throw new Error(d.error||'Proxy error '+r.status)
+    if(!r.ok||d.error)throw new Error(d.error||d.message||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
     console.log('\u2705 Payment via Vercel proxy')
   }catch(e1){
@@ -738,7 +738,8 @@ async function initiatePayment(){
     try{
       const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
       const d=await r.json()
-      if(!r.ok||d.message?.toLowerCase().includes('allowlist'))throw new Error(d.message||'Direct error '+r.status)
+      const dm=(d.message||d.error||'').toLowerCase()
+      if(!r.ok||dm.includes('allowlist')||dm.includes('domain')||dm.includes('not allowed'))throw new Error(d.message||'Direct error '+r.status)
       data=d;finalRef=d.reference||d.CheckoutRequestID||ref
       console.log('\u2705 Payment via direct PayHero')
     }catch(e2){
@@ -746,14 +747,24 @@ async function initiatePayment(){
       // Attempt 3: allorigins
       try{
         const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(PH_URL+'/payments'),{method:'POST',headers:phHeaders,body:phBody})
-        data=await r.json()
+        const d=await r.json()
+        const dm=(d.message||d.error||d.detail||'').toLowerCase()
+        if(dm.includes('allowlist')||dm.includes('domain')||dm.includes('not allowed')||dm.includes('error')||dm.includes('failed'))throw new Error(d.message||d.error||'PayHero rejected request')
+        if(!d.success&&!d.CheckoutRequestID&&!d.reference&&!d.external_reference)throw new Error('Invalid response from PayHero')
+        data=d;finalRef=d.reference||d.CheckoutRequestID||d.external_reference||ref
         console.log('\u2705 Payment via allorigins')
       }catch(e3){
-        err.innerHTML='<strong>\u26A0\uFE0F STK Push failed.</strong><br><span style="font-weight:400">'+
-          'Fix: In your <a href="https://dashboard.payhero.co.ke" target="_blank" style="color:var(--cyan)">PayHero Dashboard</a> '+
-          '\u2192 API Settings \u2192 <strong>Allowed Domains</strong>, add your website domain '+
-          '(e.g. yoursite.com, *.vercel.app, localhost).<br><br>'+
-          'Or deploy the <code>api/pay.js</code> proxy file to Vercel and update <code>PROXY_URL</code> in the code.</span>'
+        console.warn('All attempts failed. e1:',e1.message,'e2:',e2.message,'e3:',e3.message)
+        // Show user-friendly error based on which error is most informative
+        const anyMsg=[e1.message,e2.message,e3.message].join(' ').toLowerCase()
+        let friendly='Payment could not be processed. Please try again.'
+        if(anyMsg.includes('networkerror')||anyMsg.includes('failed to fetch'))
+          friendly='Network error. Please check your internet connection and try again.'
+        else if(anyMsg.includes('allowlist')||anyMsg.includes('domain')||anyMsg.includes('not allowed'))
+          friendly='Payment gateway not yet configured for this site. Please contact support.'
+        else if(anyMsg.includes('401')||anyMsg.includes('unauthorized'))
+          friendly='Payment authentication error. Please contact support.'
+        err.textContent='\u274C '+friendly
         err.style.display='block'
         btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
         btn.disabled=false;return
@@ -789,12 +800,24 @@ function pollPayStatus(ref,ti){
   let att=0;if(pollTimer)clearInterval(pollTimer)
   pollTimer=setInterval(async()=>{
     att++;try{
-      let res,data
+      let data={}
+      // Try Vercel proxy first for status check
       try{
-        const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=pr||await fetch('https://africa-ictcs-api.vercel.app/api/pay?reference='+ref)
-        data=await res.json()
-      }catch(e){data={}}
+        const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+encodeURIComponent(ref))
+        if(r.ok)data=await r.json()
+      }catch(pe){
+        // Fall back to direct PayHero
+        try{
+          const r=await fetch(PH_URL+'/transaction-status?reference='+encodeURIComponent(ref),{headers:{'Authorization':PH_AUTH}})
+          if(r.ok)data=await r.json()
+        }catch(de){
+          // Fall back to allorigins
+          try{
+            const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(PH_URL+'/transaction-status?reference='+ref),{headers:{'Authorization':PH_AUTH}})
+            if(r.ok)data=await r.json()
+          }catch(ae){data={}}
+        }
+      }
       const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
       if(st==='completed'||st==='success'||st==='0'){
         clearInterval(pollTimer);clearInterval(ti)
