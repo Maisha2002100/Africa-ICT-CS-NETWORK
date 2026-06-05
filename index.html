@@ -1187,7 +1187,7 @@ async function initiatePayment() {
     channel_id: PAYHERO_CHANNEL,
     provider,
     external_reference: reference,
-    callback_url: 'https://africa-ictcs-api.vercel.app/api/pay-callback'
+    callback_url: 'https://africa-ict-cs-network.vercel.app/api/pay-callback'
   }
 
   let result = null
@@ -1195,7 +1195,7 @@ async function initiatePayment() {
 
   // ── ATTEMPT 1: Vercel backend proxy (most reliable — bypasses CORS & domain allowlist)
   try {
-    const r = await fetch('https://africa-ictcs-api.vercel.app/api/pay', {
+    const r = await fetch('https://africa-ict-cs-network.vercel.app/api/pay', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: payload.amount, phone_number: normPhone, provider, external_reference: reference })
@@ -1299,7 +1299,7 @@ function pollPaymentStatus(reference) {
       let res, data
       try {
         // Use Vercel proxy for status polling (avoids CORS)
-        res = await fetch(`https://africa-ictcs-api.vercel.app/api/pay?reference=${reference}`)
+        res = await fetch(`https://africa-ict-cs-network.vercel.app/api/pay?reference=${reference}`)
         data = await res.json()
       } catch(e) {
         // CORS fallback via allorigins
