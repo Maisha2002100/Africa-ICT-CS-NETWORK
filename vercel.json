@@ -9,6 +9,7 @@
   "routes": [
     { "src": "/api/pay",          "dest": "/api/pay.js" },
     { "src": "/api/pay-callback", "dest": "/api/pay-callback.js" },
+    { "src": "/api/webhook",      "dest": "/api/pay-callback.js" },
     { "src": "/",                 "dest": "/index.html" },
     { "src": "/courses",          "dest": "/courses.html" },
     { "src": "/learn",            "dest": "/learn.html" },
