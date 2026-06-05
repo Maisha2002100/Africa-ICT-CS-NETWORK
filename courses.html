@@ -349,7 +349,7 @@ const CAT_ICONS={
 const BCLS={Bestseller:'b-best','Top Rated':'b-best',Popular:'b-pop',Trending:'b-pop',Hot:'b-hot',New:'b-new',Free:'b-free','Free Trial':'b-free',Advanced:'b-pop','Intermediate':'b-pop'}
 
 // ── 420+ COURSES ───────────────────────────────────────────────────────────────
-const COURSES=[,
+const COURSES=[
   // ── FREE COURSES ─────────────────────────────────────────
   {id:'free-001',title:'HTML & CSS for Absolute Beginners',cat:'Web Dev',badge:'Free',price:0,rating:4.9,reviews:5420,hrs:'8',lessons:40,lang:'EN/SW',instructor:'Amara Diallo',location:'Dakar Institute of Tech',desc:'Master the building blocks of the web. Hands-on projects, zero cost.',enrolled:18200,level:'Beginner'},
   {id:'free-002',title:'Introduction to Python Programming',cat:'Data Science',badge:'Free',price:0,rating:4.8,reviews:7890,hrs:'10',lessons:50,lang:'EN',instructor:'Chinonso Okafor',location:'Lagos Tech Hub',desc:'Learn Python from scratch with real projects.',enrolled:24600,level:'Beginner'},
@@ -408,13 +408,6 @@ Object.entries(genericData).forEach(([cat,d])=>{
 let activeCat='All',activeLevel='All',sortBy='popular',searchQ=''
 
 document.addEventListener('DOMContentLoaded',async()=>{
-  // Normalise course fields — ensure every course has instructor and school
-  COURSES.forEach(c=>{
-    if(!c.instructor) c.instructor = c.instructor_name||'Africa ICT Instructor'
-    if(!c.school)     c.school     = c.location||c.school_name||'Africa ICT & CS Network'
-    if(!c.rating)     c.rating     = 4.7
-    if(!c.reviews)    c.reviews    = 0
-  })
   const p=new URLSearchParams(location.search),cat=p.get('cat')
   if(cat)activeCat=decodeURIComponent(cat)
   if(db){
@@ -519,9 +512,9 @@ function renderCard(c){
     <div class="cc-body">
       <div class="cc-cat-tag">${c.cat}</div>
       <div class="cc-title">${c.title}</div>
-      <div class="cc-instr">${c.instructor||'Instructor'} · ${c.school||c.location||'Africa ICT & CS Network'}</div>
+      <div class="cc-instr">${c.instructor} · ${c.school}</div>
       <div class="cc-rating"><span class="cc-stars">${stars}</span><span class="cc-rn"> ${c.rating.toFixed(1)}</span><span class="cc-rc"> (${c.reviews.toLocaleString()})</span></div>
-      <div class="cc-pills"><span class="cc-pill">${c.hours}h</span><span class="cc-pill">·</span><span class="cc-pill">${c.lessons} lessons</span><span class="cc-pill">·</span><span class="cc-pill" style="color:var(--cyan)">${c.level||'Beginner'}</span></div>
+      <div class="cc-pills"><span class="cc-pill">${c.hours}h</span><span class="cc-pill">·</span><span class="cc-pill">${c.lessons} lessons</span><span class="cc-pill">·</span><span class="cc-pill" style="color:var(--cyan)">${c.level}</span></div>
       <div class="cc-foot">
         <div>${isFree?'<span class="cc-price" style="color:var(--green)">FREE</span>':`<span class="cc-price">KES ${Number(c.price||0).toLocaleString()}</span><span class="cc-old">KES ${c.oldPrice.toLocaleString()}</span>`}</div>
         <button class="${isFree?'cc-btn free':'cc-btn'}" onclick="event.stopPropagation();startEnroll('${c.id}')">${isFree?'Enroll Free':'Enroll Now'}</button>
@@ -546,7 +539,7 @@ function openDetail(id){
       <div style="position:relative;z-index:2">
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px">
           <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:${catColor}22;border:1px solid ${catColor}44;color:${catColor}">${c.cat}</span>
-          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(0,0,0,.35);color:var(--muted)">${c.level||'Beginner'}</span>
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(0,0,0,.35);color:var(--muted)">${c.level}</span>
           ${c.badge?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(245,168,0,.2);border:1px solid rgba(245,168,0,.4);color:var(--gold)">${c.badge}</span>`:''}
         </div>
         <div style="font-family:'Fraunces',serif;font-size:19px;font-weight:900;color:var(--white);line-height:1.3;max-width:490px">${c.title}</div>
@@ -579,9 +572,9 @@ function openDetail(id){
             </div>
           </div>
           <div class="instr-mini">
-            <div class="instr-av">${(c.instructor||'?')[0]}</div>
-            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px">${c.instructor||'Africa ICT Instructor'}</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${c.school||c.location||'Africa ICT & CS Network'}</div>
+            <div class="instr-av">${c.instructor[0]}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px">${c.instructor}</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${c.school}</div>
             <div style="font-size:11px;color:var(--muted);line-height:1.5">Expert instructor with 5+ years in ${c.cat}. Passionate about African tech education.</div>
           </div>
         </div>
@@ -619,7 +612,7 @@ async function doFreeEnroll(c){
     }
   }catch(e){console.warn('Enroll:',e.message)}
   closeDetail()
-  showToast('🎉 Enrolled! Opening course now…','success')
+  toast('🎉 Enrolled! Opening course now…','success')
   setTimeout(() => {
     // Map category to a content key that has rich lesson content
     const catMap = {
@@ -727,14 +720,14 @@ async function initiatePayment(){
     try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
   let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africaictnetwork.online/api/pay-callback'}
   const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
   // Attempt 1: Vercel proxy (server-side, no domain restriction)
   try{
-    const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
+    const r=await fetch('https://africa-ictcs-api.vercel.app/api/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
     const d=await r.json()
     if(!r.ok||d.error)throw new Error(d.error||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
@@ -799,7 +792,7 @@ function pollPayStatus(ref,ti){
       let res,data
       try{
         const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=pr||await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+ref)
+        res=pr||await fetch('https://africa-ictcs-api.vercel.app/api/pay?reference='+ref)
         data=await res.json()
       }catch(e){data={}}
       const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
