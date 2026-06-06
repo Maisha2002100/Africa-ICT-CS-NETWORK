@@ -727,7 +727,7 @@ async function initiatePayment(){
 
   // Attempt 1: Vercel proxy — runs server-side, bypasses CORS & domain allowlist
   try{
-    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY},body:vercelBody})
     const d=await r.json()
     if(!r.ok||d.error)throw new Error(d.error||d.message||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
@@ -803,7 +803,7 @@ function pollPayStatus(ref,ti){
       let data={}
       // Try Vercel proxy first for status check
       try{
-        const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference='+encodeURIComponent(ref))
+        const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference='+encodeURIComponent(ref),{headers:{'apikey':SB_KEY}})
         if(r.ok)data=await r.json()
       }catch(pe){
         // Fall back to direct PayHero
