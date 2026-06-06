@@ -311,7 +311,7 @@ body::before {
 const SB_URL='https://oqkbcnnjudfhlizrqjeu.supabase.co'
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xa2Jjbm5qdWRmaGxpenJxamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2ODI3MjcsImV4cCI6MjA5NTI1ODcyN30.QlXUYEwj8yVSJBzyT1tw8ZWw8rkvUXLIqqVZMtzeW5c'
 const PH_AUTH='Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
-const PH_CH=8492,PH_URL='https://backend.payhero.co.ke/api/v2'
+const PH_CH=8497,PH_URL='https://backend.payhero.co.ke/api/v2'
 let db,curUser,curProfile,pendingCourse,pollTimer
 try{db=supabase.createClient(SB_URL,SB_KEY)}catch(e){console.warn('Supabase offline')}
 
@@ -734,7 +734,7 @@ async function initiatePayment(){
     })
     const d=await r.json()
     console.log('Proxy response:',r.status,JSON.stringify(d))
-    if(!r.ok||d.error)throw new Error(d.error||d.message||'Proxy error '+r.status)
+    if(!r.ok||d.error)throw new Error((d.error||d.message||'Proxy error '+r.status)+(d.details?(' | '+JSON.stringify(d.details)):''))
     data=d;finalRef=d.reference||d.data?.reference||ref
     console.log('\u2705 Payment via Supabase proxy')
   }catch(e1){
