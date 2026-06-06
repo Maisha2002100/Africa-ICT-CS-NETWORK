@@ -720,14 +720,14 @@ async function initiatePayment(){
     try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
   let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-callback'}
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-callback'}
   const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
   // ── Supabase Edge Function proxy (server-side, no CORS issues)
   try{
-    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy',{
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
       body:vercelBody
@@ -795,7 +795,7 @@ function pollPayStatus(ref,ti){
       let res,data
       try{
         const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference='+ref,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}})
+        res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy?reference='+ref,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}})
         data=await res.json()
       }catch(e){data={}}
       const st=(data.status||data.Status||data.ResultCode||data.transaction_status||'').toString().toLowerCase()
