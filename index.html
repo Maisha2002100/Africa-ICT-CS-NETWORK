@@ -1197,7 +1197,7 @@ async function initiatePayment() {
   try {
     const r = await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
       body: JSON.stringify({ amount: payload.amount, phone_number: normPhone, provider, external_reference: reference })
     })
     const d = await r.json()
@@ -1299,7 +1299,7 @@ function pollPaymentStatus(reference) {
       let res, data
       try {
         // Use Vercel proxy for status polling (avoids CORS)
-        res = await fetch(`https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference=${reference}`)
+        res = await fetch(`https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference=${reference}`, { headers: { 'apikey': SUPABASE_KEY } })
         data = await res.json()
       } catch(e) {
         // CORS fallback via allorigins
