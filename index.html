@@ -1187,39 +1187,61 @@ async function initiatePayment() {
     channel_id: PAYHERO_CHANNEL,
     provider,
     external_reference: reference,
-    callback_url: 'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-callback'
+    callback_url: 'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy-callback'
   }
 
   let result = null
 
-  // ── Single proxy attempt via Supabase Edge Function
+  // ── ATTEMPT 1: Direct PayHero API (works when CORS is allowed by PayHero)
   try {
-    const r = await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy', {
+    const r = await fetch(`${PAYHERO_URL}/payments`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY
-      },
-      body: JSON.stringify({
-        amount: payload.amount,
-        phone_number: normPhone,
-        provider: provider,
-        external_reference: reference
-      })
+      headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
+      body: JSON.stringify(payload)
     })
-    const d = await r.json()
-    console.log('Proxy response:', r.status, JSON.stringify(d))
-    if (!r.ok || d.error) throw new Error(d.error || d.message || ('Proxy error ' + r.status))
-    result = d
-  } catch(err) {
-    console.error('Payment error:', err.message)
-    let msg = '❌ Payment failed: ' + err.message
-    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      msg = '❌ Could not reach payment server. Please check your internet and try again.'
+    result = await r.json()
+    if (!r.ok) throw new Error(result?.message || result?.detail || `PayHero error ${r.status}`)
+  } catch(directErr) {
+    console.warn('Direct PayHero failed:', directErr.message, '— trying proxy…')
+
+    // ── ATTEMPT 2: Vercel backend proxy (deploy api/pay.js to Vercel)
+    try {
+      const r = await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+        body: JSON.stringify({ amount: payload.amount, phone_number: normPhone, provider, external_reference: reference })
+      })
+      result = await r.json()
+      if (!r.ok) throw new Error(result?.error || result?.message || `Proxy error ${r.status}`)
+    } catch(proxyErr) {
+      console.warn('Vercel proxy failed:', proxyErr.message, '— trying cors-anywhere…')
+
+      // ── ATTEMPT 3: cors-anywhere proxy (last resort)
+      try {
+        const corsProxy = 'https://corsproxy.io/?' + encodeURIComponent(`${PAYHERO_URL}/payments`)
+        const r = await fetch(corsProxy, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
+          body: JSON.stringify(payload)
+        })
+        result = await r.json()
+        if (!r.ok) throw new Error(result?.message || `CORS proxy error ${r.status}`)
+      } catch(proxy2Err) {
+        // All attempts failed — show helpful error
+        const msg = directErr.message || ''
+        let friendly = '❌ Cannot connect to PayHero.'
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+          friendly = '❌ Network error. Please check your internet and try again.'
+        } else if (msg.includes('401') || msg.includes('Unauthorized')) {
+          friendly = '❌ PayHero authentication failed. Contact support.'
+        } else if (msg.includes('400')) {
+          friendly = '❌ Invalid payment details. Check your phone number.'
+        }
+        friendly += ' If the problem persists, contact support at 0798051971.'
+        btn.textContent = 'Pay Now →'; btn.disabled = false
+        return showErr('payErr', friendly)
+      }
     }
-    btn.textContent = 'Pay Now →'; btn.disabled = false
-    return showErr('payErr', msg)
   }
 
   // ── SUCCESS: STK push sent to phone
@@ -1270,7 +1292,7 @@ function pollPaymentStatus(reference) {
       let res, data
       try {
         // Use Vercel proxy for status polling (avoids CORS)
-        res = await fetch(`https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference=${reference}`, { headers: { 'apikey': SUPABASE_KEY } })
+        res = await fetch(`https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference=${reference}`)
         data = await res.json()
       } catch(e) {
         // CORS fallback via allorigins
@@ -1281,7 +1303,7 @@ function pollPaymentStatus(reference) {
         } catch(e2) { data = {} }
       }
       const status = (data.status||data.Status||'').toLowerCase()
-      if (status==='completed'||status==='success'||status==='0'||data.ResultCode==='0') { clearInterval(pollInterval); await onPaySuccess(reference) }
+      if (status==='success'||status==='0'||data.ResultCode==='0') { clearInterval(pollInterval); await onPaySuccess(reference) }
       else if (status==='failed'||status==='cancelled') { clearInterval(pollInterval); onPayFailed() }
       else if (attempts>=24) { clearInterval(pollInterval); document.getElementById('pay_waiting').innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)"><p style="margin-bottom:12px">Payment timeout. If you paid, your enrollment will be processed automatically.</p><button class="modal-btn" onclick="cm()">Close</button></div>' }
     } catch(e) {}
