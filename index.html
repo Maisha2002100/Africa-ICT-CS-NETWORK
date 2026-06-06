@@ -1191,64 +1191,35 @@ async function initiatePayment() {
   }
 
   let result = null
-  let lastErr = ''
 
-  // ── ATTEMPT 1: Vercel backend proxy (most reliable — bypasses CORS & domain allowlist)
+  // ── Single proxy attempt via Supabase Edge Function
   try {
     const r = await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ amount: payload.amount, phone_number: normPhone, provider, external_reference: reference })
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        amount: payload.amount,
+        phone_number: normPhone,
+        provider: provider,
+        external_reference: reference
+      })
     })
     const d = await r.json()
-    if (!r.ok || d.error) throw new Error(d.error || d.message || `Proxy error ${r.status}`)
+    console.log('Proxy response:', r.status, JSON.stringify(d))
+    if (!r.ok || d.error) throw new Error(d.error || d.message || ('Proxy error ' + r.status))
     result = d
-    console.log('✅ Payment via Vercel proxy')
-  } catch(proxyErr) {
-    lastErr = proxyErr.message
-    console.warn('Vercel proxy failed:', proxyErr.message, '— trying direct…')
-
-    // ── ATTEMPT 2: Direct PayHero API (works if PayHero allowlist includes the domain)
-    try {
-      const r = await fetch(`${PAYHERO_URL}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
-        body: JSON.stringify(payload)
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d?.message || d?.detail || `PayHero error ${r.status}`)
-      result = d
-      console.log('✅ Payment via direct PayHero')
-    } catch(directErr) {
-      lastErr = directErr.message
-      console.warn('Direct PayHero failed:', directErr.message, '— trying allorigins…')
-
-      // ── ATTEMPT 3: allorigins proxy (last resort for CORS blocked environments)
-      try {
-        const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(`${PAYHERO_URL}/payments`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': PAYHERO_AUTH },
-          body: JSON.stringify(payload)
-        })
-        const d = await r.json()
-        if (d?.error || d?.message?.toLowerCase().includes('error')) throw new Error(d?.message || 'allorigins error')
-        result = d
-        console.log('✅ Payment via allorigins')
-      } catch(proxy2Err) {
-        lastErr = proxy2Err.message
-        // All 3 attempts failed
-        let friendly = '❌ Payment failed. Please try again in a moment.'
-        if (lastErr.includes('Failed to fetch') || lastErr.includes('NetworkError') || lastErr.includes('network')) {
-          friendly = '❌ Network error. Please check your internet connection and try again.'
-        } else if (lastErr.includes('401') || lastErr.includes('Unauthorized')) {
-          friendly = '❌ Payment authentication error. Please contact support.'
-        } else if (lastErr.includes('timeout') || lastErr.includes('Timeout')) {
-          friendly = '❌ Request timed out. Check your internet and try again.'
-        }
-        btn.textContent = 'Pay Now →'; btn.disabled = false
-        return showErr('payErr', friendly)
-      }
+  } catch(err) {
+    console.error('Payment error:', err.message)
+    let msg = '❌ Payment failed: ' + err.message
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      msg = '❌ Could not reach payment server. Please check your internet and try again.'
     }
+    btn.textContent = 'Pay Now →'; btn.disabled = false
+    return showErr('payErr', msg)
   }
 
   // ── SUCCESS: STK push sent to phone
