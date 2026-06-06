@@ -349,7 +349,7 @@ const CAT_ICONS={
 const BCLS={Bestseller:'b-best','Top Rated':'b-best',Popular:'b-pop',Trending:'b-pop',Hot:'b-hot',New:'b-new',Free:'b-free','Free Trial':'b-free',Advanced:'b-pop','Intermediate':'b-pop'}
 
 // ── 420+ COURSES ───────────────────────────────────────────────────────────────
-const COURSES=[,
+const COURSES=[
   // ── FREE COURSES ─────────────────────────────────────────
   {id:'free-001',title:'HTML & CSS for Absolute Beginners',cat:'Web Dev',badge:'Free',price:0,rating:4.9,reviews:5420,hrs:'8',lessons:40,lang:'EN/SW',instructor:'Amara Diallo',location:'Dakar Institute of Tech',desc:'Master the building blocks of the web. Hands-on projects, zero cost.',enrolled:18200,level:'Beginner'},
   {id:'free-002',title:'Introduction to Python Programming',cat:'Data Science',badge:'Free',price:0,rating:4.8,reviews:7890,hrs:'10',lessons:50,lang:'EN',instructor:'Chinonso Okafor',location:'Lagos Tech Hub',desc:'Learn Python from scratch with real projects.',enrolled:24600,level:'Beginner'},
@@ -612,7 +612,7 @@ async function doFreeEnroll(c){
     }
   }catch(e){console.warn('Enroll:',e.message)}
   closeDetail()
-  showToast('🎉 Enrolled! Opening course now…','success')
+  toast('🎉 Enrolled! Opening course now…','success')
   setTimeout(() => {
     // Map category to a content key that has rich lesson content
     const catMap = {
@@ -746,11 +746,7 @@ async function initiatePayment(){
       // Attempt 3: allorigins
       try{
         const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(PH_URL+'/payments'),{method:'POST',headers:phHeaders,body:phBody})
-        const d=await r.json()
-        const dm=(d.message||d.error||d.detail||'').toLowerCase()
-        if(dm.includes('allowlist')||dm.includes('domain')||dm.includes('not allowed')||dm.includes('failed'))throw new Error(d.message||'PayHero rejected')
-        if(!d.success&&!d.CheckoutRequestID&&!d.reference&&!d.external_reference)throw new Error('Invalid response')
-        data=d
+        data=await r.json()
         console.log('\u2705 Payment via allorigins')
       }catch(e3){
         err.innerHTML='<strong>\u26A0\uFE0F STK Push failed.</strong><br><span style="font-weight:400">'+
