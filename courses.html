@@ -679,7 +679,7 @@ function showPayForm(){
       <div style="font-size:14px;font-weight:700;color:var(--white);margin-bottom:4px">📲 Check Your Phone!</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="waitMsg">Enter your M-Pesa PIN to complete payment</div>
       <div style="background:rgba(245,168,0,.08);border:1px solid rgba(245,168,0,.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--gold)">
-        💡 No prompt? Dial *334# or check SMS from Safaricom
+        💡 No prompt? Dial *334# on your phone or check SMS from Safaricom. You have 3 minutes to complete.
       </div>
       <div style="font-size:11px;color:var(--muted)" id="waitTimer"></div>
       <button onclick="cancelPayment()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">Cancel</button>
@@ -798,8 +798,9 @@ function pollPayStatus(ref,ti){
         res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference='+ref,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}})
         data=await res.json()
       }catch(e){data={}}
-      const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
-      if(st==='completed'||st==='success'||st==='0'){
+      const st=(data.status||data.Status||data.ResultCode||data.transaction_status||'').toString().toLowerCase()
+      console.log('Poll status:',st,JSON.stringify(data))
+      if(st==='completed'||st==='success'||st==='0'||st==='successful'){
         clearInterval(pollTimer);clearInterval(ti)
         if(db&&curUser?.id){try{await db.from('payments').update({status:'completed',completed_at:new Date().toISOString()}).eq('reference',ref);if(pendingCourse?.fromDB)await db.from('enrollments').upsert({user_id:curUser?.id||'',course_id:pendingCourse?.id,status:'active',progress_percent:0,enrolled_at:new Date().toISOString()},{onConflict:'user_id,course_id'})}catch(e){}}
         showPaySuccess()
@@ -807,7 +808,7 @@ function pollPayStatus(ref,ti){
         clearInterval(pollTimer);clearInterval(ti)
         try{await db?.from('payments')?.update({status:'failed'}).eq('reference',ref)}catch(e){}
         showPayFailed()
-      }else if(att>=24){clearInterval(pollTimer);clearInterval(ti);document.getElementById('payWait').innerHTML=`<div style="padding:16px;text-align:center"><div style="color:var(--gold);font-weight:700;margin-bottom:6px">Payment Timeout</div><p style="font-size:12px;color:var(--muted);margin-bottom:14px">If you paid, your enrollment will be processed within 5 min. Check your email for confirmation.</p><button onclick="closePay()" style="background:var(--surface);border:1.5px solid var(--border);color:var(--body);padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Close</button></div>`}
+      }else if(att>=36){clearInterval(pollTimer);clearInterval(ti);document.getElementById('payWait').innerHTML=`<div style="padding:16px;text-align:center"><div style="color:var(--gold);font-weight:700;margin-bottom:6px">Payment Timeout</div><p style="font-size:12px;color:var(--muted);margin-bottom:14px">If you entered your M-Pesa PIN, your enrollment will be processed within 5 minutes automatically. If no prompt arrived, please try again.</p><button onclick="closePay()" style="background:var(--surface);border:1.5px solid var(--border);color:var(--body);padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Close</button></div>`}
     }catch(e){}
   },5000)
 }
