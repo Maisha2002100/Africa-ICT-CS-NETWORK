@@ -311,7 +311,7 @@ body::before {
 const SB_URL='https://oqkbcnnjudfhlizrqjeu.supabase.co'
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xa2Jjbm5qdWRmaGxpenJxamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2ODI3MjcsImV4cCI6MjA5NTI1ODcyN30.QlXUYEwj8yVSJBzyT1tw8ZWw8rkvUXLIqqVZMtzeW5c'
 const PH_AUTH='Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
-const PH_CH=8492,PH_URL='https://backend.payhero.co.ke/api/v2'
+const PH_CH=9054,PH_URL='https://backend.payhero.co.ke/api/v2'
 let db,curUser,curProfile,pendingCourse,pollTimer
 try{db=supabase.createClient(SB_URL,SB_KEY)}catch(e){console.warn('Supabase offline')}
 
@@ -679,7 +679,7 @@ function showPayForm(){
       <div style="font-size:14px;font-weight:700;color:var(--white);margin-bottom:4px">📲 Check Your Phone!</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="waitMsg">Enter your M-Pesa PIN to complete payment</div>
       <div style="background:rgba(245,168,0,.08);border:1px solid rgba(245,168,0,.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--gold)">
-        💡 No prompt? Dial *334# on your phone or check SMS from Safaricom. You have 3 minutes to complete.
+        💡 No prompt? Dial *334# or check SMS from Safaricom
       </div>
       <div style="font-size:11px;color:var(--muted)" id="waitTimer"></div>
       <button onclick="cancelPayment()" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">Cancel</button>
@@ -725,42 +725,39 @@ async function initiatePayment(){
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
-  // ── Supabase Edge Function proxy (server-side, no CORS issues)
+  // Attempt 1: Vercel proxy (server-side, no domain restriction)
   try{
-    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
-      body:vercelBody
-    })
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
     const d=await r.json()
-    console.log('Proxy response:',r.status,JSON.stringify(d))
-    if(!r.ok||d.error)throw new Error((d.error||d.message||'Proxy error '+r.status)+(d.details?(' | '+JSON.stringify(d.details)):''))
+    if(!r.ok||d.error)throw new Error(d.error||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
-    console.log('\u2705 Payment via Supabase proxy')
+    console.log('\u2705 Payment via Vercel proxy')
   }catch(e1){
-    console.warn('Supabase proxy failed:',e1.message)
-    let errMsg='\u274C Payment failed.'
-    if(e1.message.includes('Failed to fetch')||e1.message.includes('NetworkError')){
-      errMsg='\u274C Payment server unreachable. Please refresh the page and try again.'
-    } else if(e1.message.includes('not a payments channel')){
-      errMsg='\u274C Payment channel error. Please contact support.'
-    } else {
-      errMsg='\u274C Payment failed: '+e1.message
-    }
-    // Fallback: Direct PayHero
+    console.warn('Proxy failed:',e1.message)
+    // Attempt 2: Direct PayHero
     try{
       const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
       const d=await r.json()
-      const dm=(d.message||d.error||'').toLowerCase()
-      if(!r.ok||dm.includes('allowlist')||dm.includes('domain')||dm.includes('not a payments'))throw new Error(d.message||'PayHero error '+r.status)
+      if(!r.ok||d.message?.toLowerCase().includes('allowlist'))throw new Error(d.message||'Direct error '+r.status)
       data=d;finalRef=d.reference||d.CheckoutRequestID||ref
       console.log('\u2705 Payment via direct PayHero')
     }catch(e2){
       console.warn('Direct failed:',e2.message)
-      err.innerHTML=errMsg+'<br><small style="color:#8aa8c8">If this persists, contact support.</small>'
-      err.style.display='block'
-      btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
-      btn.disabled=false;return
+      // Attempt 3: allorigins
+      try{
+        const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(PH_URL+'/payments'),{method:'POST',headers:phHeaders,body:phBody})
+        data=await r.json()
+        console.log('\u2705 Payment via allorigins')
+      }catch(e3){
+        err.innerHTML='<strong>\u26A0\uFE0F STK Push failed.</strong><br><span style="font-weight:400">'+
+          'Fix: In your <a href="https://dashboard.payhero.co.ke" target="_blank" style="color:var(--cyan)">PayHero Dashboard</a> '+
+          '\u2192 API Settings \u2192 <strong>Allowed Domains</strong>, add your website domain '+
+          '(e.g. yoursite.com, *.vercel.app, localhost).<br><br>'+
+          'Or deploy the <code>api/pay.js</code> proxy file to Vercel and update <code>PROXY_URL</code> in the code.</span>'
+        err.style.display='block'
+        btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
+        btn.disabled=false;return
+      }
     }
   }
 
@@ -795,12 +792,11 @@ function pollPayStatus(ref,ti){
       let res,data
       try{
         const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy?reference='+ref,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}})
+        res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy?reference='+ref)
         data=await res.json()
       }catch(e){data={}}
-      const st=(data.status||data.Status||data.ResultCode||data.transaction_status||'').toString().toLowerCase()
-      console.log('Poll status:',st,JSON.stringify(data))
-      if(st==='completed'||st==='success'||st==='0'||st==='successful'){
+      const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
+      if(st==='completed'||st==='success'||st==='0'){
         clearInterval(pollTimer);clearInterval(ti)
         if(db&&curUser?.id){try{await db.from('payments').update({status:'completed',completed_at:new Date().toISOString()}).eq('reference',ref);if(pendingCourse?.fromDB)await db.from('enrollments').upsert({user_id:curUser?.id||'',course_id:pendingCourse?.id,status:'active',progress_percent:0,enrolled_at:new Date().toISOString()},{onConflict:'user_id,course_id'})}catch(e){}}
         showPaySuccess()
@@ -808,7 +804,7 @@ function pollPayStatus(ref,ti){
         clearInterval(pollTimer);clearInterval(ti)
         try{await db?.from('payments')?.update({status:'failed'}).eq('reference',ref)}catch(e){}
         showPayFailed()
-      }else if(att>=36){clearInterval(pollTimer);clearInterval(ti);document.getElementById('payWait').innerHTML=`<div style="padding:16px;text-align:center"><div style="color:var(--gold);font-weight:700;margin-bottom:6px">Payment Timeout</div><p style="font-size:12px;color:var(--muted);margin-bottom:14px">If you entered your M-Pesa PIN, your enrollment will be processed within 5 minutes automatically. If no prompt arrived, please try again.</p><button onclick="closePay()" style="background:var(--surface);border:1.5px solid var(--border);color:var(--body);padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Close</button></div>`}
+      }else if(att>=36){clearInterval(pollTimer);clearInterval(ti);document.getElementById('payWait').innerHTML=`<div style="padding:16px;text-align:center"><div style="color:var(--gold);font-weight:700;margin-bottom:6px">Payment Timeout</div><p style="font-size:12px;color:var(--muted);margin-bottom:14px">If you paid, your enrollment will be processed within 5 min. Check your email for confirmation.</p><button onclick="closePay()" style="background:var(--surface);border:1.5px solid var(--border);color:var(--body);padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Close</button></div>`}
     }catch(e){}
   },5000)
 }
