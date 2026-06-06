@@ -739,17 +739,25 @@ async function initiatePayment(){
     console.log('\u2705 Payment via Supabase proxy')
   }catch(e1){
     console.warn('Supabase proxy failed:',e1.message)
+    let errMsg='\u274C Payment failed.'
+    if(e1.message.includes('Failed to fetch')||e1.message.includes('NetworkError')){
+      errMsg='\u274C Payment server unreachable. Please refresh the page and try again.'
+    } else if(e1.message.includes('not a payments channel')){
+      errMsg='\u274C Payment channel error. Please contact support.'
+    } else {
+      errMsg='\u274C Payment failed: '+e1.message
+    }
     // Fallback: Direct PayHero
     try{
       const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
       const d=await r.json()
       const dm=(d.message||d.error||'').toLowerCase()
-      if(!r.ok||dm.includes('allowlist')||dm.includes('domain'))throw new Error(d.message||'PayHero error '+r.status)
+      if(!r.ok||dm.includes('allowlist')||dm.includes('domain')||dm.includes('not a payments'))throw new Error(d.message||'PayHero error '+r.status)
       data=d;finalRef=d.reference||d.CheckoutRequestID||ref
       console.log('\u2705 Payment via direct PayHero')
     }catch(e2){
       console.warn('Direct failed:',e2.message)
-      err.innerHTML='\u274C Payment failed: '+e1.message+'<br><small style="color:#8aa8c8">If this persists, contact support.</small>'
+      err.innerHTML=errMsg+'<br><small style="color:#8aa8c8">If this persists, contact support.</small>'
       err.style.display='block'
       btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
       btn.disabled=false;return
