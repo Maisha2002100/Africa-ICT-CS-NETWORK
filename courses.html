@@ -727,7 +727,7 @@ async function initiatePayment(){
 
   // Attempt 1: Vercel proxy (server-side, no domain restriction)
   try{
-    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody})
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},body:vercelBody})
     const d=await r.json()
     if(!r.ok||d.error)throw new Error(d.error||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
@@ -921,7 +921,7 @@ function toast(msg,type='info'){
     <div id="secretErr" style="font-size:12px;color:#f87171;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:7px;padding:8px 12px;margin-bottom:12px;display:none"></div>
     <div style="text-align:left;margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Admin Email</label><input id="s_email" type="email" value="admin@africaictcs.com" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
     <div style="text-align:left;margin-bottom:6px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Password</label><input id="s_pass" type="password" placeholder="Admin password" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
-
+    
     <button id="secretLoginBtn" onclick="doSecretLogin()" style="width:100%;background:linear-gradient(135deg,#f5a800,#e07800);color:#0e1c2e;font-size:14px;font-weight:800;padding:13px;border-radius:10px;border:none;cursor:pointer;font-family:inherit">Access Admin Panel →</button>
     <div style="margin-top:14px;font-size:11px;color:#4e6e8e">🔒 Hidden access — tap logo 6 times</div>
   </div>
