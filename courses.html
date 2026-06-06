@@ -720,44 +720,39 @@ async function initiatePayment(){
     try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
   let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-callback'}
   const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
-  // Attempt 1: Vercel proxy (server-side, no domain restriction)
+  // ── Supabase Edge Function proxy (server-side, no CORS issues)
   try{
-    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},body:vercelBody})
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:vercelBody
+    })
     const d=await r.json()
-    if(!r.ok||d.error)throw new Error(d.error||'Proxy error '+r.status)
+    console.log('Proxy response:',r.status,JSON.stringify(d))
+    if(!r.ok||d.error)throw new Error(d.error||d.message||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
-    console.log('\u2705 Payment via Vercel proxy')
+    console.log('\u2705 Payment via Supabase proxy')
   }catch(e1){
-    console.warn('Proxy failed:',e1.message)
-    // Attempt 2: Direct PayHero
+    console.warn('Supabase proxy failed:',e1.message)
+    // Fallback: Direct PayHero
     try{
       const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
       const d=await r.json()
-      if(!r.ok||d.message?.toLowerCase().includes('allowlist'))throw new Error(d.message||'Direct error '+r.status)
+      const dm=(d.message||d.error||'').toLowerCase()
+      if(!r.ok||dm.includes('allowlist')||dm.includes('domain'))throw new Error(d.message||'PayHero error '+r.status)
       data=d;finalRef=d.reference||d.CheckoutRequestID||ref
       console.log('\u2705 Payment via direct PayHero')
     }catch(e2){
       console.warn('Direct failed:',e2.message)
-      // Attempt 3: allorigins
-      try{
-        const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(PH_URL+'/payments'),{method:'POST',headers:phHeaders,body:phBody})
-        data=await r.json()
-        console.log('\u2705 Payment via allorigins')
-      }catch(e3){
-        err.innerHTML='<strong>\u26A0\uFE0F STK Push failed.</strong><br><span style="font-weight:400">'+
-          'Fix: In your <a href="https://dashboard.payhero.co.ke" target="_blank" style="color:var(--cyan)">PayHero Dashboard</a> '+
-          '\u2192 API Settings \u2192 <strong>Allowed Domains</strong>, add your website domain '+
-          '(e.g. yoursite.com, *.vercel.app, localhost).<br><br>'+
-          'Or deploy the <code>api/pay.js</code> proxy file to Vercel and update <code>PROXY_URL</code> in the code.</span>'
-        err.style.display='block'
-        btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
-        btn.disabled=false;return
-      }
+      err.innerHTML='\u274C Payment failed: '+e1.message+'<br><small style="color:#8aa8c8">If this persists, contact support.</small>'
+      err.style.display='block'
+      btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
+      btn.disabled=false;return
     }
   }
 
