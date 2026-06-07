@@ -2,8 +2,8 @@
 // Vercel Serverless Function (Node.js)
 
 const PH_URL  = 'https://backend.payhero.co.ke/api/v2'
-const PH_AUTH = process.env.PAYHERO_AUTH || 'Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
-const PH_CH   = parseInt(process.env.PAYHERO_CHANNEL || '8492')
+const PH_AUTH = 'Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
+const PH_CH   = 9054
 
 module.exports = async function handler(req, res) {
   // CORS headers
