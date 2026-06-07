@@ -311,7 +311,7 @@ body::before {
 const SB_URL='https://oqkbcnnjudfhlizrqjeu.supabase.co'
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xa2Jjbm5qdWRmaGxpenJxamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2ODI3MjcsImV4cCI6MjA5NTI1ODcyN30.QlXUYEwj8yVSJBzyT1tw8ZWw8rkvUXLIqqVZMtzeW5c'
 const PH_AUTH='Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
-const PH_CH=9054,PH_URL='https://backend.payhero.co.ke/api/v2'
+const PH_CH=8492,PH_URL='https://backend.payhero.co.ke/api/v2'
 let db,curUser,curProfile,pendingCourse,pollTimer
 try{db=supabase.createClient(SB_URL,SB_KEY)}catch(e){console.warn('Supabase offline')}
 
@@ -706,65 +706,85 @@ function normPhone(r){
   return null
 }
 async function initiatePayment(){
-  // Must be logged in to pay
-  if(!curUser){closePay();openAuth('signin');return}
-  const phone=document.getElementById('payPhone').value.trim()
-  const prov=document.getElementById('selProv_val').value
-  const btn=document.getElementById('payBtn'),err=document.getElementById('payErr')
-  if(!phone){err.textContent='Enter your phone number';err.style.display='block';return}
-  const np=normPhone(phone)
-  if(!np){err.textContent='Invalid number — use format 0712 345 678';err.style.display='block';return}
-  err.style.display='none';btn.textContent='\u{1F4F2} Sending STK Push…';btn.disabled=true
-  const ref=`AICTN-${(curUser?.id||'GS').slice(0,8).toUpperCase()}-${Date.now()}`
-  if(db&&curUser?.id){
-    try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
+  var err=document.getElementById('payErr')
+  if(err)err.style.display='none'
+  if(!pendingCourse)return
+  var phoneEl=document.getElementById('phoneInput')
+  var phone=phoneEl?phoneEl.value.trim():''
+  var prov=selectedProvider||'mpesa'
+  if(!phone){
+    if(err){err.textContent='Please enter your phone number';err.style.display='block'}
+    return
   }
-  let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
-  const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
-  const phBody=JSON.stringify(phPayload)
-  const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
-
-  // Vercel proxy — pay.js is in the GitHub repo, auto-deployed
-  try{
-    const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay',{
-      method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody
-    })
-    const d=await r.json()
-    console.log('Vercel proxy:',r.status,JSON.stringify(d))
-    if(!r.ok||d.error)throw new Error(d.error||d.message||'Proxy error '+r.status)
-    data=d;finalRef=d.reference||d.data?.reference||ref
-  }catch(e1){
-    console.error('Proxy failed:',e1.message)
+  var np=phone.replace(/\D/g,'')
+  if(np.startsWith('0')&&np.length===10)np='254'+np.slice(1)
+  if(np.startsWith('7')&&np.length===9)np='254'+np
+  if(!np.startsWith('254')||np.length!==12){
+    if(err){err.textContent='Invalid phone. Use 07XXXXXXXX';err.style.display='block'}
+    return
+  }
+  var ref='AICTN-'+Date.now()
+  if(db&&curUser){
     try{
-      const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
-      const d=await r.json()
-      const dm=(d.message||d.error||'').toLowerCase()
-      if(!r.ok||dm.includes('not a payments channel'))throw new Error(d.message||'PayHero error')
-      data=d;finalRef=d.reference||d.CheckoutRequestID||ref
-    }catch(e2){
-      err.textContent='\u274C Payment failed: '+e2.message
-      err.style.display='block'
-      btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
-      btn.disabled=false;return
-    }
+      db.from('payments').insert({user_id:curUser.id,course_id:pendingCourse.id,
+        amount:pendingCourse.price,phone:np,provider:prov,reference:ref,status:'pending'})
+    }catch(e){console.warn('Payment record:',e.message)}
   }
-
-  btn.style.display='none'
-  const w=document.getElementById('payWait')
+  var lipwaUrl='https://lipwa.link/8492?amount='+pendingCourse.price+'&phone_number='+np+'&external_reference='+ref+'&provider='+prov
+  window.open(lipwaUrl,'_blank')
+  var w=document.getElementById('payWait')
+  var btn=document.getElementById('payBtn')
+  if(btn)btn.style.display='none'
   if(w){
     w.style.display='block'
-    // Update the wait UI with phone and amount
-    const wmsg=document.getElementById('waitMsg')
-    if(wmsg) wmsg.textContent='M-Pesa prompt sent to '+np+'. Enter your PIN to pay KES '+Number(pendingCourse?.price||0).toLocaleString()
-  } else {
-    // payWait not found — inject wait state
-    const content2=document.getElementById('payContent')
-    if(content2) content2.innerHTML='<div style="text-align:center;padding:28px"><div class="spinner"></div><div style="font-size:15px;font-weight:700;color:var(--white);margin-top:14px">📲 Check Your Phone!</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Enter your M-Pesa PIN on '+np+'</div></div>'
+    w.innerHTML='<div style="text-align:center;padding:20px 0">'
+      +'<div style="font-size:36px;margin-bottom:12px">&#128241;</div>'
+      +'<h3 style="color:var(--text);margin-bottom:8px">Payment Page Opened!</h3>'
+      +'<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Complete your M-Pesa payment in the tab that just opened. Then tap below.</p>'
+      +'<button id="paidBtn" style="background:var(--gold);color:#000;border:none;padding:14px;border-radius:10px;font-weight:700;cursor:pointer;width:100%;font-size:15px">&#9989; I have paid</button>'
+      +'<button onclick="window.open('+JSON.stringify(lipwaUrl)+')" style="background:transparent;color:var(--cyan);border:1px solid var(--cyan);padding:10px;border-radius:10px;cursor:pointer;width:100%;margin-top:10px;font-size:13px">Reopen payment page</button>'
+      +'<small style="color:var(--muted);cursor:pointer;display:block;margin-top:10px" onclick="location.reload()">Cancel</small>'
+      +'</div>'
+    document.getElementById('paidBtn').addEventListener('click',function(){checkAndEnroll(ref)})
   }
-
-  let secs=0;const ti=setInterval(()=>{secs++;const el=document.getElementById('waitTimer');if(el)el.textContent='Checking payment status… ('+secs+'s elapsed)'},1000)
-  pollPayStatus(finalRef,ti)
+}
+async function checkAndEnroll(ref){
+  var w=document.getElementById('payWait')
+  if(w)w.innerHTML='<div style="text-align:center;padding:30px"><p style="color:var(--muted)">Checking payment...</p></div>'
+  var paid=false
+  for(var i=0;i<10;i++){
+    try{
+      var r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+ref)
+      var d=await r.json()
+      var st=(d.status||d.Status||'').toLowerCase()
+      console.log('Poll:',st,JSON.stringify(d))
+      if(st==='completed'||st==='success'){paid=true;break}
+    }catch(e){console.warn('Poll:',e.message)}
+    await new Promise(function(res){setTimeout(res,3000)})
+  }
+  if(paid){
+    if(db&&curUser&&pendingCourse){
+      try{
+        await db.from('enrollments').upsert(
+          {user_id:curUser.id,course_id:pendingCourse.id,status:'active',progress_percent:0,enrolled_at:new Date().toISOString()},
+          {onConflict:'user_id,course_id'})
+        await db.from('payments').update({status:'completed',completed_at:new Date().toISOString()}).eq('reference',ref)
+      }catch(e){console.warn('Enroll:',e.message)}
+    }
+    if(w)w.innerHTML='<div style="text-align:center;padding:20px">'
+      +'<div style="font-size:48px">&#127881;</div>'
+      +'<h3 style="color:var(--cyan);margin:12px 0">Enrolled Successfully!</h3>'
+      +'<button onclick="closeDetail();location.reload()" style="background:var(--cyan);color:#000;border:none;padding:12px 24px;border-radius:10px;font-weight:700;cursor:pointer">Start Learning &#8594;</button>'
+      +'</div>'
+  }else{
+    if(w)w.innerHTML='<div style="text-align:center;padding:20px">'
+      +'<p style="color:var(--muted);margin-bottom:16px">Payment not confirmed yet. If you paid, wait 30 seconds and try again.</p>'
+      +'<button id="retryBtn" style="background:var(--gold);color:#000;border:none;padding:12px 24px;border-radius:10px;font-weight:700;cursor:pointer;width:100%">Try again</button>'
+      +'<small style="color:var(--muted);cursor:pointer;display:block;margin-top:10px" onclick="location.reload()">Cancel</small>'
+      +'</div>'
+    var rb=document.getElementById('retryBtn')
+    if(rb)rb.addEventListener('click',function(){checkAndEnroll(ref)})
+  }
 }
 
 function cancelPayment(){
@@ -793,7 +813,7 @@ function pollPayStatus(ref,ti){
         clearInterval(pollTimer);clearInterval(ti)
         try{await db?.from('payments')?.update({status:'failed'}).eq('reference',ref)}catch(e){}
         showPayFailed()
-      }else if(att>=36){clearInterval(pollTimer);clearInterval(ti);document.getElementById('payWait').innerHTML=`<div style="padding:16px;text-align:center"><div style="color:var(--gold);font-weight:700;margin-bottom:6px">Payment Timeout</div><p style="font-size:12px;color:var(--muted);margin-bottom:14px">If you paid, your enrollment will be processed within 5 min. Check your email for confirmation.</p><button onclick="closePay()" style="background:var(--surface);border:1.5px solid var(--border);color:var(--body);padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Close</button></div>`}
+      }else if(att>=24){clearInterval(pollTimer);clearInterval(ti);document.getElementById('payWait').innerHTML=`<div style="padding:16px;text-align:center"><div style="color:var(--gold);font-weight:700;margin-bottom:6px">Payment Timeout</div><p style="font-size:12px;color:var(--muted);margin-bottom:14px">If you paid, your enrollment will be processed within 5 min. Check your email for confirmation.</p><button onclick="closePay()" style="background:var(--surface);border:1.5px solid var(--border);color:var(--body);padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Close</button></div>`}
     }catch(e){}
   },5000)
 }
