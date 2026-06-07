@@ -720,14 +720,14 @@ async function initiatePayment(){
     try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
   let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-callback'}
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-callback'}
   const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
   const phBody=JSON.stringify(phPayload)
   const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
   // Attempt 1: Vercel proxy (server-side, no domain restriction)
   try{
-    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},body:vercelBody})
+    const r=await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},body:vercelBody})
     const d=await r.json()
     if(!r.ok||d.error)throw new Error(d.error||'Proxy error '+r.status)
     data=d;finalRef=d.reference||d.data?.reference||ref
@@ -752,8 +752,7 @@ async function initiatePayment(){
         err.innerHTML='<strong>\u26A0\uFE0F STK Push failed.</strong><br><span style="font-weight:400">'+
           'Fix: In your <a href="https://dashboard.payhero.co.ke" target="_blank" style="color:var(--cyan)">PayHero Dashboard</a> '+
           '\u2192 API Settings \u2192 <strong>Allowed Domains</strong>, add your website domain '+
-          '(e.g. yoursite.com, *.vercel.app, localhost).<br><br>'+
-          'Or deploy the <code>api/pay.js</code> proxy file to Vercel and update <code>PROXY_URL</code> in the code.</span>'
+          'Please try again or contact support.</span>'
         err.style.display='block'
         btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
         btn.disabled=false;return
@@ -792,7 +791,7 @@ function pollPayStatus(ref,ti){
       let res,data
       try{
         const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/Pay-proxy?reference='+ref)
+        res=pr||await fetch('https://oqkbcnnjudfhlizrqjeu.supabase.co/functions/v1/pay-proxy?reference='+ref)
         data=await res.json()
       }catch(e){data={}}
       const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
@@ -921,7 +920,7 @@ function toast(msg,type='info'){
     <div id="secretErr" style="font-size:12px;color:#f87171;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:7px;padding:8px 12px;margin-bottom:12px;display:none"></div>
     <div style="text-align:left;margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Admin Email</label><input id="s_email" type="email" value="admin@africaictcs.com" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
     <div style="text-align:left;margin-bottom:6px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Password</label><input id="s_pass" type="password" placeholder="Admin password" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
-    
+    <div style="font-size:11px;color:#4e6e8e;margin-bottom:18px;text-align:right;cursor:pointer" onclick="document.getElementById('credHint').style.display=document.getElementById('credHint').style.display==='none'?'block':'none'">
     <button id="secretLoginBtn" onclick="doSecretLogin()" style="width:100%;background:linear-gradient(135deg,#f5a800,#e07800);color:#0e1c2e;font-size:14px;font-weight:800;padding:13px;border-radius:10px;border:none;cursor:pointer;font-family:inherit">Access Admin Panel →</button>
     <div style="margin-top:14px;font-size:11px;color:#4e6e8e">🔒 Hidden access — tap logo 6 times</div>
   </div>
