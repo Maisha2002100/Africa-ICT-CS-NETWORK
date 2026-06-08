@@ -1,9 +1,7 @@
 // api/pay.js — PayHero STK Push Proxy
 const PH_URL  = 'https://backend.payhero.co.ke/api/v2'
 const PH_AUTH = 'Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
-
-// Try channels in order — 9054 worked before for STK push
-const CHANNELS = [9054, 9053, 8492]
+const PH_CH   = 9054
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -11,7 +9,6 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
 
-  // GET — check payment status
   if (req.method === 'GET') {
     const { reference } = req.query
     if (!reference) return res.status(400).json({ error: 'reference required' })
@@ -27,7 +24,6 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // POST — initiate STK push
   if (req.method === 'POST') {
     try {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
@@ -45,52 +41,38 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid phone. Use 07XXXXXXXX' })
       }
 
-      const ref = external_reference || `AICTN-${Date.now()}`
+      const ref = external_reference || ('AICTN-' + Date.now())
       const protocol = req.headers['x-forwarded-proto'] || 'https'
       const host     = req.headers['host'] || 'africa-ict-cs-network.vercel.app'
-      const errors   = []
 
-      // Try each channel until one works
-      for (const channelId of CHANNELS) {
-        const payload = {
-          amount:             Number(amount),
-          phone_number:       phone,
-          channel_id:         channelId,
-          provider:           provider || 'mpesa',
-          external_reference: ref,
-          callback_url:       `${protocol}://${host}/api/pay-callback`
-        }
-        console.log(`Trying channel ${channelId}:`, JSON.stringify(payload))
+      const payload = {
+        amount:             Number(amount),
+        phone_number:       phone,
+        channel_id:         PH_CH,
+        provider:           provider || 'mpesa',
+        external_reference: ref,
+        callback_url:       `${protocol}://${host}/api/pay-callback`
+      }
 
-        const phRes = await fetch(`${PH_URL}/payments`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': PH_AUTH },
-          body:    JSON.stringify(payload)
-        })
-        const data = await phRes.json()
-        console.log(`Channel ${channelId} response:`, phRes.status, JSON.stringify(data))
+      console.log('Sending to PayHero:', JSON.stringify(payload))
 
-        if (phRes.ok && !data.error && !data.error_code) {
-          console.log(`✅ SUCCESS with channel ${channelId}`)
-          return res.status(200).json({ success: true, reference: ref, channel_used: channelId, data })
-        }
+      const phRes = await fetch(`${PH_URL}/payments`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': PH_AUTH },
+        body:    JSON.stringify(payload)
+      })
 
-        const msg = (data.message || data.error || data.error_message || '').toLowerCase()
-        if (msg.includes('not a payments channel') || msg.includes('invalid channel')) {
-          errors.push(`ch${channelId}: ${msg}`)
-          continue // try next channel
-        }
+      const data = await phRes.json()
+      console.log('PayHero response:', phRes.status, JSON.stringify(data))
 
-        // Any other error — return it with full details so we can see it
+      if (!phRes.ok) {
         return res.status(phRes.status).json({
-          error:   data.message || data.error || data.error_message || `PayHero ${phRes.status}`,
-          details: data,
-          channel: channelId
+          error:   data.message || data.error || data.error_message || ('PayHero error ' + phRes.status),
+          details: data
         })
       }
 
-      // All channels failed
-      return res.status(400).json({ error: 'No working channel found', tried: CHANNELS, errors })
+      return res.status(200).json({ success: true, reference: ref, data })
 
     } catch (err) {
       console.error('Pay error:', err.message)
