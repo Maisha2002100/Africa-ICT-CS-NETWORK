@@ -311,7 +311,7 @@ body::before {
 const SB_URL='https://oqkbcnnjudfhlizrqjeu.supabase.co'
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xa2Jjbm5qdWRmaGxpenJxamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2ODI3MjcsImV4cCI6MjA5NTI1ODcyN30.QlXUYEwj8yVSJBzyT1tw8ZWw8rkvUXLIqqVZMtzeW5c'
 const PH_AUTH='Basic YVlPRnJRbWROVElQMmdFcXpDRFI6dXJIazlTTW9TcndZT0k4UXFZRUVzUlhmUmZ3TklsZ1RBejBnVGl5Rw=='
-const PH_CH=9054,PH_URL='https://backend.payhero.co.ke/api/v2'
+const PH_CH=8492,PH_URL='https://backend.payhero.co.ke/api/v2'
 let db,curUser,curProfile,pendingCourse,pollTimer
 try{db=supabase.createClient(SB_URL,SB_KEY)}catch(e){console.warn('Supabase offline')}
 
@@ -706,64 +706,123 @@ function normPhone(r){
   return null
 }
 async function initiatePayment(){
-  // Must be logged in to pay
   if(!curUser){closePay();openAuth('signin');return}
   const phone=document.getElementById('payPhone').value.trim()
   const prov=document.getElementById('selProv_val').value
-  const btn=document.getElementById('payBtn'),err=document.getElementById('payErr')
+  const btn=document.getElementById('payBtn')
+  const err=document.getElementById('payErr')
   if(!phone){err.textContent='Enter your phone number';err.style.display='block';return}
-  const np=normPhone(phone)
-  if(!np){err.textContent='Invalid number — use format 0712 345 678';err.style.display='block';return}
-  err.style.display='none';btn.textContent='\u{1F4F2} Sending STK Push…';btn.disabled=true
-  const ref=`AICTN-${(curUser?.id||'GS').slice(0,8).toUpperCase()}-${Date.now()}`
-  if(db&&curUser?.id){
-    try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
+  let np=phone.replace(/\D/g,'')
+  if(np.startsWith('0')&&np.length===10)np='254'+np.slice(1)
+  if(np.startsWith('7')&&np.length===9)np='254'+np
+  if(np.startsWith('1')&&np.length===9)np='254'+np
+  if(!np.startsWith('254')||np.length!==12){
+    err.textContent='Invalid phone number. Use 07XXXXXXXX'
+    err.style.display='block';return
   }
-  let data=null,finalRef=ref
-  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
-  const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
-  const phBody=JSON.stringify(phPayload)
-  const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
+  err.style.display='none'
+  btn.disabled=true
+  btn.textContent='Opening payment...'
 
-  // Vercel proxy — api/pay.js in GitHub repo
-  try{
-    const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay',{
-      method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody
-    })
-    const d=await r.json()
-    console.log('Vercel:',r.status,JSON.stringify(d))
-    if(!r.ok||d.error)throw new Error(d.error||d.message||'Error '+r.status)
-    data=d;finalRef=d.reference||d.data?.reference||ref
-  }catch(e1){
-    console.error('Failed:',e1.message)
+  const ref='AICTN-'+Date.now()
+
+  // Save pending payment record
+  if(db&&curUser&&pendingCourse){
     try{
-      const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
-      const d=await r.json()
-      if(!r.ok)throw new Error(d.message||d.error||'PayHero error '+r.status)
-      data=d;finalRef=d.reference||d.CheckoutRequestID||ref
-    }catch(e2){
-      err.textContent='\u274C '+e2.message
-      err.style.display='block'
-      btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' \u2192'
-      btn.disabled=false;return
-    }
+      await db.from('payments').insert({
+        user_id:curUser.id,
+        course_id:pendingCourse.id,
+        amount:pendingCourse.price,
+        phone:np,
+        provider:prov||'mpesa',
+        reference:ref,
+        status:'pending'
+      })
+    }catch(e){console.warn('Record:',e.message)}
   }
 
+  // Build PayHero hosted checkout URL
+  const lipwaUrl='https://lipwa.link/8492'
+    +'?amount='+(pendingCourse?pendingCourse.price:0)
+    +'&phone_number='+np
+    +'&external_reference='+ref
+    +'&provider='+(prov||'mpesa')
+
+  // Open in new tab
+  window.open(lipwaUrl,'_blank')
+
+  // Show "I have paid" UI
   btn.style.display='none'
   const w=document.getElementById('payWait')
   if(w){
     w.style.display='block'
-    // Update the wait UI with phone and amount
-    const wmsg=document.getElementById('waitMsg')
-    if(wmsg) wmsg.textContent='M-Pesa prompt sent to '+np+'. Enter your PIN to pay KES '+Number(pendingCourse?.price||0).toLocaleString()
-  } else {
-    // payWait not found — inject wait state
-    const content2=document.getElementById('payContent')
-    if(content2) content2.innerHTML='<div style="text-align:center;padding:28px"><div class="spinner"></div><div style="font-size:15px;font-weight:700;color:var(--white);margin-top:14px">📲 Check Your Phone!</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Enter your M-Pesa PIN on '+np+'</div></div>'
+    w.innerHTML=''
+    var d=document.createElement('div')
+    d.style.cssText='text-align:center;padding:16px 0'
+    d.innerHTML='<div style="font-size:40px;margin-bottom:12px">&#128241;</div>'
+      +'<h3 style="color:var(--text);margin:0 0 8px">Payment Page Opened</h3>'
+      +'<p style="color:var(--muted);font-size:13px;margin:0 0 16px">Complete your M-Pesa payment in the new tab, then tap the button below.</p>'
+      +'<button id="iPaidBtn" style="background:var(--gold);color:#000;border:none;padding:14px;border-radius:10px;font-weight:700;cursor:pointer;width:100%;font-size:15px;margin-bottom:8px">&#10003; I have completed payment</button>'
+      +'<button id="reopenBtn" style="background:transparent;color:var(--cyan);border:1px solid var(--cyan);padding:10px;border-radius:10px;cursor:pointer;width:100%;font-size:13px;margin-bottom:8px">Reopen payment page</button>'
+      +'<small id="cancelPay" style="color:var(--muted);cursor:pointer;display:block;margin-top:4px">Cancel</small>'
+    w.appendChild(d)
+    document.getElementById('iPaidBtn').onclick=function(){confirmPayment(ref,np)}
+    document.getElementById('reopenBtn').onclick=function(){window.open(lipwaUrl,'_blank')}
+    document.getElementById('cancelPay').onclick=function(){location.reload()}
   }
+}
 
-  let secs=0;const ti=setInterval(()=>{secs++;const el=document.getElementById('waitTimer');if(el)el.textContent='Checking payment status… ('+secs+'s elapsed)'},1000)
-  pollPayStatus(finalRef,ti)
+async function confirmPayment(ref,np){
+  var btn=document.getElementById('iPaidBtn')
+  if(btn){btn.disabled=true;btn.textContent='Checking...'}
+  var paid=false
+  // Poll Vercel proxy for status
+  for(var i=0;i<12;i++){
+    try{
+      var r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+encodeURIComponent(ref))
+      var d=await r.json()
+      var st=(d.status||d.Status||'').toLowerCase()
+      console.log('Poll '+i+':',st,JSON.stringify(d))
+      if(st==='completed'||st==='success'||st==='successful'){paid=true;break}
+      if(st==='failed'||st==='cancelled'){break}
+    }catch(e){console.warn('Poll error:',e.message)}
+    await new Promise(function(res){setTimeout(res,4000)})
+  }
+  if(paid){
+    // Enroll user
+    if(db&&curUser&&pendingCourse){
+      try{
+        await db.from('enrollments').upsert(
+          {user_id:curUser.id,course_id:pendingCourse.id,status:'active',
+           progress_percent:0,enrolled_at:new Date().toISOString()},
+          {onConflict:'user_id,course_id'})
+        await db.from('payments').update(
+          {status:'completed',completed_at:new Date().toISOString()})
+          .eq('reference',ref)
+      }catch(e){console.warn('Enroll:',e.message)}
+    }
+    var w=document.getElementById('payWait')
+    if(w)w.innerHTML='<div style="text-align:center;padding:20px">'
+      +'<div style="font-size:52px">&#127881;</div>'
+      +'<h3 style="color:var(--cyan);margin:12px 0">Enrolled Successfully!</h3>'
+      +'<p style="color:var(--muted);font-size:13px;margin-bottom:16px">You now have access to '+( pendingCourse?pendingCourse.title:'this course')+'</p>'
+      +'<button onclick="closeDetail();location.reload()" style="background:var(--cyan);color:#000;border:none;padding:12px 24px;border-radius:10px;font-weight:700;cursor:pointer">Start Learning &#8594;</button>'
+      +'</div>'
+  }else{
+    if(btn){
+      btn.disabled=false
+      btn.textContent='&#10003; I have completed payment'
+    }
+    var w=document.getElementById('payWait')
+    var msg=w?w.querySelector('#statusMsg'):null
+    if(!msg&&w){
+      msg=document.createElement('p')
+      msg.id='statusMsg'
+      msg.style.cssText='color:var(--warn);font-size:13px;text-align:center;margin-top:8px'
+      w.appendChild(msg)
+    }
+    if(msg)msg.textContent='Payment not confirmed yet. If you paid, please wait 30 seconds and try again.'
+  }
 }
 
 function cancelPayment(){
@@ -780,7 +839,7 @@ function pollPayStatus(ref,ti){
       let res,data
       try{
         const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=pr||await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+ref)
+        res=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+ref)
         data=await res.json()
       }catch(e){data={}}
       const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
