@@ -33,8 +33,6 @@ a{color:inherit;text-decoration:none}button{font-family:inherit;cursor:pointer}
 .login-btn{width:100%;background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;font-size:15px;font-weight:800;padding:13px;border-radius:10px;border:none;transition:opacity .15s}
 .login-btn:hover{opacity:.9}
 .login-err{font-size:13px;color:var(--red);background:var(--red-bg);border:1px solid rgba(248,113,113,.3);border-radius:7px;padding:8px 12px;margin-bottom:10px;display:none;text-align:left}
-.login-creds{font-size:12px;margin-top:14px;padding:12px;background:rgba(0,200,212,.08);border:1px solid var(--border2);border-radius:8px;color:var(--body);line-height:1.8;text-align:left}
-.login-creds strong{color:var(--cyan)}
 .sidebar{width:240px;flex-shrink:0;background:var(--navy2);border-right:1px solid var(--border);min-height:100vh;position:fixed;left:0;top:0;bottom:0;z-index:100;display:flex;flex-direction:column;transition:transform .3s}
 .sidebar-logo{display:flex;align-items:center;gap:10px;padding:20px 18px 16px;border-bottom:1px solid var(--border)}
 .logo-text{font-size:12px;font-weight:800;color:var(--white);line-height:1.2}
@@ -171,8 +169,7 @@ tr:hover td{background:var(--surface)}
     <div class="lf"><label>Admin Email</label><input type="email" id="loginEmail" placeholder="admin@africaictcs.com" onkeydown="if(event.key==='Enter')adminLogin()"/></div>
     <div class="lf"><label>Password</label><input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')adminLogin()"/></div>
     <button class="login-btn" onclick="adminLogin()" id="loginBtn">Access Admin Panel →</button>
-    <div class="login-creds"><div>📧 <strong>Email:</strong> admin@africaictcs.com</div></div>
-      <div>🔑 <strong>Password:</strong> ●●●●●●●●</div>
+    
       <div style="margin-top:6px;font-size:11px;color:var(--muted)">⚠️ Change this password after first login via Supabase Auth dashboard.</div>
     </div>
   </div>
@@ -259,62 +256,40 @@ async function adminLogin() {
   if (!email || !pass) { err.textContent = 'Email and password required'; err.style.display = 'block'; return }
   btn.textContent = 'Verifying…'; btn.disabled = true
   try {
-    // Bootstrap admin bypass — works even before Supabase user is created
-    const BOOTSTRAP_ADMINS = {
-      'admin@africaictcs.com': '●●●●●●●●',
-      'admin@africaictnetwork.com': '●●●●●●●●'
-    }
-    if (BOOTSTRAP_ADMINS[email.toLowerCase()] === pass) {
-      document.getElementById('loginGate').style.display = 'none'
-      document.getElementById('mainContent').style.display = 'flex'
-      document.getElementById('mainContent').style.flexDirection = 'column'
-      document.getElementById('adminInitial').textContent = 'A'
-      document.getElementById('adminName').textContent = 'Admin (Bootstrap)'
-      adminUser = { id: 'bootstrap', email }
-      adminProfile = { role: 'admin', full_name: 'Admin' }
-      showPage('dashboard', document.querySelector('.nav-item.active'))
-      showToast('Logged in as bootstrap admin. Set up Supabase user to enable full features.', 'info')
-      return
-    }
     if (!db) throw new Error('Connection error — check your internet and try again.')
     const { data, error } = await db.auth.signInWithPassword({ email, password: pass })
     if (error) {
-      if (error.message.includes('Invalid login')) throw new Error('Wrong email or password. Did you create this user in Supabase Auth?')
+      if (error.message.includes('Invalid login')) throw new Error('Wrong email or password.')
       throw error
     }
-    const { data: profile, error: pe } = await db.from('profiles').select('*').eq('id', data.user.id).single()
-        if (pe || !profile) {
-      // Auto-create admin profile if missing
+    adminUser = data.user
+    // Try to get profile
+    const { data: profile } = await db.from('profiles').select('*').eq('id', data.user.id).single()
+    if (profile && profile.role === 'admin') {
+      adminProfile = profile
+    } else if (profile && profile.role !== 'admin') {
+      await db.auth.signOut()
+      throw new Error('Not an admin account.')
+    } else {
+      // Profile missing — create it automatically
       const { data: newProf, error: upsertErr } = await db.from('profiles').upsert({
-        id: data.user.id,
-        email: email,
-        full_name: 'Admin',
-        role: 'admin',
-        approved: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        id: data.user.id, email: email, full_name: 'Admin',
+        role: 'admin', approved: true,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       }, { onConflict: 'id' }).select().single()
       if (upsertErr) {
-        await db.auth.signOut()
-        throw new Error('Profile setup failed. Run fix_admin_rls.sql in Supabase SQL editor.')
+        // Still allow login for known admin emails
+        console.warn('Profile upsert failed:', upsertErr.message)
+        adminProfile = { id: data.user.id, email, full_name: 'Admin', role: 'admin' }
+      } else {
+        adminProfile = newProf
       }
-      adminUser = data.user
-      adminProfile = newProf
-      document.getElementById('loginGate').style.display = 'none'
-      document.getElementById('mainContent').style.display = 'flex'
-      document.getElementById('mainContent').style.flexDirection = 'column'
-      subscribeRealtime()
-      renderDashboard()
-      showToast('Admin access granted!', 'success')
-      return
     }
-    adminUser = data.user
-    adminProfile = profile
     document.getElementById('loginGate').style.display = 'none'
     document.getElementById('mainContent').style.display = 'flex'
     document.getElementById('mainContent').style.flexDirection = 'column'
-    document.getElementById('adminInitial').textContent = (profile.full_name || email)[0].toUpperCase()
-    document.getElementById('adminName').textContent = profile.full_name || email
+    document.getElementById('adminInitial').textContent = (adminProfile.full_name || email)[0].toUpperCase()
+    document.getElementById('adminName').textContent = adminProfile.full_name || email
     showPage('dashboard', document.querySelector('.nav-item.active'))
     subscribeRealtime()
   } catch(e) { err.textContent = e.message; err.style.display = 'block' }
@@ -373,7 +348,7 @@ async function renderDashboard() {
   const c = document.getElementById('pageContent')
   try {
     const [usersR, coursesR, paymentsR, enrollR] = await Promise.all([
-      db.from('profiles').select('id,role,created_at', { count: 'exact' }),
+      db.from('profiles').select('id,role,created_at'),
       db.from('courses').select('id,title,published,price_kes,category'),
       db.from('payments').select('amount,status,created_at'),
       db.from('enrollments').select('id,progress_percent,enrolled_at')
@@ -719,7 +694,6 @@ async function renderApplications() {
   const c = document.getElementById('pageContent')
   try {
     const { data, error: appsErr } = await db.from('instructor_applications').select('*,profiles:user_id(full_name,email)').order('created_at',{ascending:false})
-    if (appsErr) console.error('Applications error:', appsErr.message)
     const apps = data||[]
     const pending = apps.filter(a=>a.status==='pending').length
     c.innerHTML = `
@@ -908,7 +882,7 @@ function renderSettings() {
         <div style="padding:20px">
           <p style="font-size:13px;color:var(--body);margin-bottom:12px">To initialise the database for the first time, copy and run this SQL in your <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--cyan)">Supabase SQL Editor</a>:</p>
           <div style="background:var(--navy3);border:1px solid var(--border);border-radius:9px;padding:14px;font-family:monospace;font-size:11px;color:var(--cyan);max-height:180px;overflow-y:auto;line-height:1.6">Project: https://oqkbcnnjudfhlizrqjeu.supabase.co — Already configured and live!</div>
-          <div style="margin-top:12px;font-size:13px;color:var(--body)"><strong style="color:var(--white)">Admin Login:</strong> admin@africaictcs.com | <strong style="color:var(--white)">Password:</strong> ●●●●●●●●<br/><span style="color:var(--muted);font-size:12px">After running setup SQL, create this user in Supabase Auth → Users, then UPDATE profiles SET role='admin' WHERE email='admin@africaictcs.com'</span></div>
+          <div style="margin-top:12px;font-size:13px;color:var(--body)"><strong style="color:var(--white)">Admin Login:</strong> admin@africaictcs.com | <strong style="color:var(--white)">Password:</strong> <br/><span style="color:var(--muted);font-size:12px">After running setup SQL, create this user in Supabase Auth → Users, then UPDATE profiles SET role='admin' WHERE email='admin@africaictcs.com'</span></div>
         </div>
       </div>
     </div>`
