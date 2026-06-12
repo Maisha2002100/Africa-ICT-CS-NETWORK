@@ -760,10 +760,63 @@ function pollPG(ref, ti) {
 
 // ── CERTIFICATE ───────────────────────────────────────────────────────────────
 function genCert() {
-  const name  = currentUser?.email?.split('@')[0] || 'Learner'
-  const title = curCourse?.title  || 'Course'
-  const cat   = curCourse?.cat    || ''
-  openCert(name, title, cat, '', null)
+  var title = (curCourse && curCourse.title) ? curCourse.title : 'Course'
+  var cat   = (curCourse && curCourse.cat)   ? curCourse.cat   : ''
+  var defaultName = ''
+  if (currentProfile && currentProfile.full_name) defaultName = currentProfile.full_name
+  else if (currentUser && currentUser.email) defaultName = currentUser.email.split('@')[0]
+  else defaultName = 'Learner'
+  showCertNameDialog(defaultName, title, cat, '')
+}
+
+function showCertNameDialog(defaultName, title, cat, certId) {
+  var existing = document.getElementById('certNameModal')
+  if (existing) existing.remove()
+  var overlay = document.createElement('div')
+  overlay.id = 'certNameModal'
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px'
+  var box = document.createElement('div')
+  box.style.cssText = 'background:#0e1c2e;border:1px solid rgba(0,200,212,.3);border-radius:16px;padding:28px;max-width:400px;width:100%'
+  var h = document.createElement('h3')
+  h.style.cssText = 'color:#f0f6ff;margin:0 0 8px;font-size:18px'
+  h.textContent = '🎓 Your Certificate'
+  var p = document.createElement('p')
+  p.style.cssText = 'color:#8aa8c8;font-size:13px;margin:0 0 20px'
+  p.textContent = 'Enter the name you want on your certificate'
+  var lbl = document.createElement('label')
+  lbl.style.cssText = 'color:#8aa8c8;font-size:12px;display:block;margin-bottom:6px'
+  lbl.textContent = 'Full Name'
+  var inp = document.createElement('input')
+  inp.id = 'certNameInput'
+  inp.type = 'text'
+  inp.value = defaultName
+  inp.placeholder = 'Enter your full name'
+  inp.style.cssText = 'width:100%;padding:12px;background:#162333;border:1px solid rgba(0,200,212,.3);border-radius:8px;color:#f0f6ff;font-size:15px;box-sizing:border-box;margin-bottom:16px'
+  var row = document.createElement('div')
+  row.style.cssText = 'display:flex;gap:10px'
+  var cancelBtn = document.createElement('button')
+  cancelBtn.style.cssText = 'flex:1;padding:12px;background:transparent;border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#8aa8c8;cursor:pointer;font-size:14px'
+  cancelBtn.textContent = 'Cancel'
+  cancelBtn.onclick = function() { overlay.remove() }
+  var dlBtn = document.createElement('button')
+  dlBtn.style.cssText = 'flex:2;padding:12px;background:linear-gradient(135deg,#f5c842,#e6a817);border:none;border-radius:8px;color:#0e1c2e;font-weight:800;cursor:pointer;font-size:14px'
+  dlBtn.textContent = '⬇ Download Certificate'
+  dlBtn.onclick = function() {
+    var name = inp.value.trim()
+    if (!name) { inp.style.border = '1px solid red'; return }
+    overlay.remove()
+    openCert(name, title, cat, certId || '', null)
+  }
+  row.appendChild(cancelBtn)
+  row.appendChild(dlBtn)
+  box.appendChild(h)
+  box.appendChild(p)
+  box.appendChild(lbl)
+  box.appendChild(inp)
+  box.appendChild(row)
+  overlay.appendChild(box)
+  document.body.appendChild(overlay)
+  setTimeout(function() { inp.select() }, 50)
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -976,10 +1029,11 @@ function openCertModal(courseId, title, cat, certId) {
 }
 
 function viewCertificate(courseId, courseTitle, certNum, issuedAt) {
-  const name = (typeof currentProfile !== 'undefined' && currentProfile?.full_name)
-    || (typeof currentUser !== 'undefined' && currentUser?.email?.split('@')[0])
-    || 'Learner'
-  openCert(name, courseTitle || 'Course', '', certNum || '', issuedAt || null)
+  var defaultName = ''
+  if (currentProfile && currentProfile.full_name) defaultName = currentProfile.full_name
+  else if (currentUser && currentUser.email) defaultName = currentUser.email.split('@')[0]
+  else defaultName = 'Learner'
+  showCertNameDialog(defaultName, courseTitle || 'Course', '', certNum || '')
 }
 
 function genCert() {
