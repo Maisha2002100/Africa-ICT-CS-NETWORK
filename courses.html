@@ -349,7 +349,7 @@ const CAT_ICONS={
 const BCLS={Bestseller:'b-best','Top Rated':'b-best',Popular:'b-pop',Trending:'b-pop',Hot:'b-hot',New:'b-new',Free:'b-free','Free Trial':'b-free',Advanced:'b-pop','Intermediate':'b-pop'}
 
 // ── 420+ COURSES ───────────────────────────────────────────────────────────────
-const COURSES=[
+const COURSES=[,
   // ── FREE COURSES ─────────────────────────────────────────
   {id:'free-001',title:'HTML & CSS for Absolute Beginners',cat:'Web Dev',badge:'Free',price:0,rating:4.9,reviews:5420,hrs:'8',lessons:40,lang:'EN/SW',instructor:'Amara Diallo',location:'Dakar Institute of Tech',desc:'Master the building blocks of the web. Hands-on projects, zero cost.',enrolled:18200,level:'Beginner'},
   {id:'free-002',title:'Introduction to Python Programming',cat:'Data Science',badge:'Free',price:0,rating:4.8,reviews:7890,hrs:'10',lessons:50,lang:'EN',instructor:'Chinonso Okafor',location:'Lagos Tech Hub',desc:'Learn Python from scratch with real projects.',enrolled:24600,level:'Beginner'},
@@ -612,7 +612,7 @@ async function doFreeEnroll(c){
     }
   }catch(e){console.warn('Enroll:',e.message)}
   closeDetail()
-  toast('🎉 Enrolled! Opening course now…','success')
+  showToast('🎉 Enrolled! Opening course now…','success')
   setTimeout(() => {
     // Map category to a content key that has rich lesson content
     const catMap = {
@@ -706,123 +706,64 @@ function normPhone(r){
   return null
 }
 async function initiatePayment(){
+  // Must be logged in to pay
   if(!curUser){closePay();openAuth('signin');return}
   const phone=document.getElementById('payPhone').value.trim()
   const prov=document.getElementById('selProv_val').value
-  const btn=document.getElementById('payBtn')
-  const err=document.getElementById('payErr')
+  const btn=document.getElementById('payBtn'),err=document.getElementById('payErr')
   if(!phone){err.textContent='Enter your phone number';err.style.display='block';return}
-  let np=phone.replace(/\D/g,'')
-  if(np.startsWith('0')&&np.length===10)np='254'+np.slice(1)
-  if(np.startsWith('7')&&np.length===9)np='254'+np
-  if(np.startsWith('1')&&np.length===9)np='254'+np
-  if(!np.startsWith('254')||np.length!==12){
-    err.textContent='Invalid phone number. Use 07XXXXXXXX'
-    err.style.display='block';return
+  const np=normPhone(phone)
+  if(!np){err.textContent='Invalid number — use format 0712 345 678';err.style.display='block';return}
+  err.style.display='none';btn.textContent='\u{1F4F2} Sending STK Push…';btn.disabled=true
+  const ref=`AICTN-${(curUser?.id||'GS').slice(0,8).toUpperCase()}-${Date.now()}`
+  if(db&&curUser?.id){
+    try{await db.from('payments').insert({user_id:curUser?.id||'',course_id:pendingCourse?.fromDB?pendingCourse?.id:null,amount:pendingCourse?.price||0,phone:np,provider:prov,reference:ref,status:'pending',created_at:new Date().toISOString()})}catch(e){console.log('Payment record:',e.message)}
   }
-  err.style.display='none'
-  btn.disabled=true
-  btn.textContent='Opening payment...'
+  let data=null,finalRef=ref
+  const phPayload={amount:pendingCourse?.price||0,phone_number:np,channel_id:PH_CH,provider:prov,external_reference:ref,callback_url:'https://africa-ict-cs-network.vercel.app/api/pay-callback'}
+  const vercelBody=JSON.stringify({amount:pendingCourse?.price||0,phone_number:np,provider:prov,external_reference:ref})
+  const phBody=JSON.stringify(phPayload)
+  const phHeaders={'Content-Type':'application/json','Authorization':PH_AUTH}
 
-  const ref='AICTN-'+Date.now()
-
-  // Save pending payment record
-  if(db&&curUser&&pendingCourse){
+  // Vercel proxy — api/pay.js in GitHub repo
+  try{
+    const r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:vercelBody
+    })
+    const d=await r.json()
+    console.log('Vercel:',r.status,JSON.stringify(d))
+    if(!r.ok||d.error)throw new Error(d.error||d.message||'Error '+r.status)
+    data=d;finalRef=d.reference||d.data?.reference||ref
+  }catch(e1){
+    console.error('Failed:',e1.message)
     try{
-      await db.from('payments').insert({
-        user_id:curUser.id,
-        course_id:pendingCourse.id,
-        amount:pendingCourse.price,
-        phone:np,
-        provider:prov||'mpesa',
-        reference:ref,
-        status:'pending'
-      })
-    }catch(e){console.warn('Record:',e.message)}
+      const r=await fetch(PH_URL+'/payments',{method:'POST',headers:phHeaders,body:phBody})
+      const d=await r.json()
+      if(!r.ok)throw new Error(d.message||d.error||'PayHero error '+r.status)
+      data=d;finalRef=d.reference||d.CheckoutRequestID||ref
+    }catch(e2){
+      err.textContent='Payment failed: '+e2.message
+      err.style.display='block'
+      btn.textContent='Pay KES '+Number(pendingCourse?.price||0).toLocaleString()+' →'
+      btn.disabled=false;return
+    }
   }
 
-  // Build PayHero hosted checkout URL
-  const lipwaUrl='https://lipwa.link/8492'
-    +'?amount='+(pendingCourse?pendingCourse.price:0)
-    +'&phone_number='+np
-    +'&external_reference='+ref
-    +'&provider='+(prov||'mpesa')
-
-  // Open in new tab
-  window.open(lipwaUrl,'_blank')
-
-  // Show "I have paid" UI
   btn.style.display='none'
   const w=document.getElementById('payWait')
   if(w){
     w.style.display='block'
-    w.innerHTML=''
-    var d=document.createElement('div')
-    d.style.cssText='text-align:center;padding:16px 0'
-    d.innerHTML='<div style="font-size:40px;margin-bottom:12px">&#128241;</div>'
-      +'<h3 style="color:var(--text);margin:0 0 8px">Payment Page Opened</h3>'
-      +'<p style="color:var(--muted);font-size:13px;margin:0 0 16px">Complete your M-Pesa payment in the new tab, then tap the button below.</p>'
-      +'<button id="iPaidBtn" style="background:var(--gold);color:#000;border:none;padding:14px;border-radius:10px;font-weight:700;cursor:pointer;width:100%;font-size:15px;margin-bottom:8px">&#10003; I have completed payment</button>'
-      +'<button id="reopenBtn" style="background:transparent;color:var(--cyan);border:1px solid var(--cyan);padding:10px;border-radius:10px;cursor:pointer;width:100%;font-size:13px;margin-bottom:8px">Reopen payment page</button>'
-      +'<small id="cancelPay" style="color:var(--muted);cursor:pointer;display:block;margin-top:4px">Cancel</small>'
-    w.appendChild(d)
-    document.getElementById('iPaidBtn').onclick=function(){confirmPayment(ref,np)}
-    document.getElementById('reopenBtn').onclick=function(){window.open(lipwaUrl,'_blank')}
-    document.getElementById('cancelPay').onclick=function(){location.reload()}
+    // Update the wait UI with phone and amount
+    const wmsg=document.getElementById('waitMsg')
+    if(wmsg) wmsg.textContent='M-Pesa prompt sent to '+np+'. Enter your PIN to pay KES '+Number(pendingCourse?.price||0).toLocaleString()
+  } else {
+    // payWait not found — inject wait state
+    const content2=document.getElementById('payContent')
+    if(content2) content2.innerHTML='<div style="text-align:center;padding:28px"><div class="spinner"></div><div style="font-size:15px;font-weight:700;color:var(--white);margin-top:14px">📲 Check Your Phone!</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Enter your M-Pesa PIN on '+np+'</div></div>'
   }
-}
 
-async function confirmPayment(ref,np){
-  var btn=document.getElementById('iPaidBtn')
-  if(btn){btn.disabled=true;btn.textContent='Checking...'}
-  var paid=false
-  // Poll Vercel proxy for status
-  for(var i=0;i<12;i++){
-    try{
-      var r=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+encodeURIComponent(ref))
-      var d=await r.json()
-      var st=(d.status||d.Status||'').toLowerCase()
-      console.log('Poll '+i+':',st,JSON.stringify(d))
-      if(st==='completed'||st==='success'||st==='successful'){paid=true;break}
-      if(st==='failed'||st==='cancelled'){break}
-    }catch(e){console.warn('Poll error:',e.message)}
-    await new Promise(function(res){setTimeout(res,4000)})
-  }
-  if(paid){
-    // Enroll user
-    if(db&&curUser&&pendingCourse){
-      try{
-        await db.from('enrollments').upsert(
-          {user_id:curUser.id,course_id:pendingCourse.id,status:'active',
-           progress_percent:0,enrolled_at:new Date().toISOString()},
-          {onConflict:'user_id,course_id'})
-        await db.from('payments').update(
-          {status:'completed',completed_at:new Date().toISOString()})
-          .eq('reference',ref)
-      }catch(e){console.warn('Enroll:',e.message)}
-    }
-    var w=document.getElementById('payWait')
-    if(w)w.innerHTML='<div style="text-align:center;padding:20px">'
-      +'<div style="font-size:52px">&#127881;</div>'
-      +'<h3 style="color:var(--cyan);margin:12px 0">Enrolled Successfully!</h3>'
-      +'<p style="color:var(--muted);font-size:13px;margin-bottom:16px">You now have access to '+( pendingCourse?pendingCourse.title:'this course')+'</p>'
-      +'<button onclick="closeDetail();location.reload()" style="background:var(--cyan);color:#000;border:none;padding:12px 24px;border-radius:10px;font-weight:700;cursor:pointer">Start Learning &#8594;</button>'
-      +'</div>'
-  }else{
-    if(btn){
-      btn.disabled=false
-      btn.textContent='&#10003; I have completed payment'
-    }
-    var w=document.getElementById('payWait')
-    var msg=w?w.querySelector('#statusMsg'):null
-    if(!msg&&w){
-      msg=document.createElement('p')
-      msg.id='statusMsg'
-      msg.style.cssText='color:var(--warn);font-size:13px;text-align:center;margin-top:8px'
-      w.appendChild(msg)
-    }
-    if(msg)msg.textContent='Payment not confirmed yet. If you paid, please wait 30 seconds and try again.'
-  }
+  let secs=0;const ti=setInterval(()=>{secs++;const el=document.getElementById('waitTimer');if(el)el.textContent='Checking payment status… ('+secs+'s elapsed)'},1000)
+  pollPayStatus(finalRef,ti)
 }
 
 function cancelPayment(){
@@ -839,7 +780,7 @@ function pollPayStatus(ref,ti){
       let res,data
       try{
         const pr=await fetch(PH_URL+'/transaction-status?reference='+ref,{headers:{'Authorization':PH_AUTH}}).catch(()=>null)
-        res=await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+ref)
+        res=pr||await fetch('https://africa-ict-cs-network.vercel.app/api/pay?reference='+ref)
         data=await res.json()
       }catch(e){data={}}
       const st=(data.status||data.Status||data.ResultCode||'').toString().toLowerCase()
@@ -969,7 +910,7 @@ function toast(msg,type='info'){
     <div style="text-align:left;margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Admin Email</label><input id="s_email" type="email" value="admin@africaictcs.com" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
     <div style="text-align:left;margin-bottom:6px"><label style="display:block;font-size:11px;font-weight:600;color:#8aa8c8;margin-bottom:5px">Password</label><input id="s_pass" type="password" placeholder="Admin password" style="width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(0,200,212,.2);border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13px;color:#f0f6ff;outline:none" onfocus="this.style.borderColor='#00c8d4'" onblur="this.style.borderColor='rgba(0,200,212,.2)'" onkeydown="if(event.key==='Enter')doSecretLogin()"/></div>
     <div style="font-size:11px;color:#4e6e8e;margin-bottom:18px;text-align:right;cursor:pointer" onclick="document.getElementById('credHint').style.display=document.getElementById('credHint').style.display==='none'?'block':'none'">Show credentials hint</div>
-    <div id="credHint" style="display:none;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;text-align:left;font-size:12px;line-height:1.8;color:#8aa8c8">📧 <span style="color:#f0f6ff">admin@africaictcs.com</span><br>🔑 <span style="color:#f0f6ff"></span></div>
+    <div id="credHint" style="display:none;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;text-align:left;font-size:12px;line-height:1.8;color:#8aa8c8">📧 <span style="color:#f0f6ff">admin@africaictcs.com</span><br>🔑 <span style="color:#f0f6ff">@39582861</span></div>
     <button id="secretLoginBtn" onclick="doSecretLogin()" style="width:100%;background:linear-gradient(135deg,#f5a800,#e07800);color:#0e1c2e;font-size:14px;font-weight:800;padding:13px;border-radius:10px;border:none;cursor:pointer;font-family:inherit">Access Admin Panel →</button>
     <div style="margin-top:14px;font-size:11px;color:#4e6e8e">🔒 Hidden access — tap logo 6 times</div>
   </div>
@@ -1015,4 +956,99 @@ document.getElementById('secretOverlay').addEventListener('click',function(e){if
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('secretOverlay').style.display!=='none')closeSecretPanel()})
 </script>
 
+
+<div id="supportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;overflow-y:auto;padding:20px">
+  <div style="background:#0e1c2e;border:1px solid rgba(0,200,212,.25);border-radius:16px;max-width:520px;margin:40px auto;padding:32px;position:relative">
+    <button onclick="document.getElementById('supportModal').style.display='none';document.body.style.overflow=''" style="position:absolute;top:14px;right:16px;background:transparent;border:none;color:#8aa8c8;font-size:22px;cursor:pointer">&#x2715;</button>
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:40px;margin-bottom:8px">&#129309;</div>
+      <h2 style="color:#f0f6ff;margin:0 0 6px;font-size:22px">We are here to help</h2>
+      <p style="color:#8aa8c8;font-size:14px;margin:0">Africa ICT &amp; CS Network Support</p>
+    </div>
+    <div style="display:grid;gap:12px;margin-bottom:24px">
+      <a href="https://wa.me/254798051971" target="_blank" style="display:flex;align-items:center;gap:14px;padding:16px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.25);border-radius:12px;text-decoration:none">
+        <div style="width:44px;height:44px;background:#25d366;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">&#128172;</div>
+        <div>
+          <div style="color:#25d366;font-weight:700;font-size:14px">WhatsApp Support</div>
+          <div style="color:#f0f6ff;font-size:15px;font-weight:600">+254 798 051 971</div>
+          <div style="color:#8aa8c8;font-size:12px">Fastest response · Mon-Sat 8am-8pm EAT</div>
+        </div>
+        <div style="margin-left:auto;color:#25d366;font-size:20px">&#8594;</div>
+      </a>
+      <a href="mailto:support@africaictnetwork.online" style="display:flex;align-items:center;gap:14px;padding:16px;background:rgba(0,200,212,.08);border:1px solid rgba(0,200,212,.25);border-radius:12px;text-decoration:none">
+        <div style="width:44px;height:44px;background:rgba(0,200,212,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">&#128231;</div>
+        <div>
+          <div style="color:#00c8d4;font-weight:700;font-size:14px">Email Support</div>
+          <div style="color:#f0f6ff;font-size:14px">support@africaictnetwork.online</div>
+          <div style="color:#8aa8c8;font-size:12px">Response within 24 hours</div>
+        </div>
+        <div style="margin-left:auto;color:#00c8d4;font-size:20px">&#8594;</div>
+      </a>
+      <a href="tel:+254798051971" style="display:flex;align-items:center;gap:14px;padding:16px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:12px;text-decoration:none">
+        <div style="width:44px;height:44px;background:rgba(245,200,66,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">&#128222;</div>
+        <div>
+          <div style="color:#f5c842;font-weight:700;font-size:14px">Call Us</div>
+          <div style="color:#f0f6ff;font-size:15px;font-weight:600">+254 798 051 971</div>
+          <div style="color:#8aa8c8;font-size:12px">Mon-Fri 9am-6pm EAT</div>
+        </div>
+        <div style="margin-left:auto;color:#f5c842;font-size:20px">&#8594;</div>
+      </a>
+    </div>
+    <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:20px">
+      <div style="color:#f0f6ff;font-weight:700;font-size:13px;margin-bottom:12px">&#128203; Common Questions</div>
+      <div style="display:grid;gap:8px">
+        <details style="padding:10px 12px;background:rgba(0,200,212,.06);border-radius:8px">
+          <summary style="color:#00c8d4;font-size:13px;font-weight:600;cursor:pointer">&#128179; Payment not going through?</summary>
+          <div style="color:#8aa8c8;font-size:12px;margin-top:8px;line-height:1.8">
+            1. Make sure M-Pesa is active on your number<br>
+            2. Confirm you have sufficient balance<br>
+            3. Dial *334# to check for pending prompts<br>
+            4. WhatsApp us with your phone number and course name
+          </div>
+        </details>
+        <details style="padding:10px 12px;background:rgba(0,200,212,.06);border-radius:8px">
+          <summary style="color:#00c8d4;font-size:13px;font-weight:600;cursor:pointer">&#127891; Paid but not enrolled?</summary>
+          <div style="color:#8aa8c8;font-size:12px;margin-top:8px;line-height:1.8">
+            1. Wait 5 minutes and refresh the page<br>
+            2. Log out and log back in<br>
+            3. WhatsApp us your payment reference — we will manually enroll you within 1 hour
+          </div>
+        </details>
+        <details style="padding:10px 12px;background:rgba(0,200,212,.06);border-radius:8px">
+          <summary style="color:#00c8d4;font-size:13px;font-weight:600;cursor:pointer">&#128220; Certificate not downloading?</summary>
+          <div style="color:#8aa8c8;font-size:12px;margin-top:8px;line-height:1.8">
+            1. Complete 100% of the course first<br>
+            2. Use Chrome or Firefox browser<br>
+            3. Email us your name and course — we will send it directly
+          </div>
+        </details>
+        <details style="padding:10px 12px;background:rgba(0,200,212,.06);border-radius:8px">
+          <summary style="color:#00c8d4;font-size:13px;font-weight:600;cursor:pointer">&#128273; Forgot your password?</summary>
+          <div style="color:#8aa8c8;font-size:12px;margin-top:8px;line-height:1.8">
+            1. Click Log In on the homepage<br>
+            2. Click Forgot password<br>
+            3. Enter your email to receive a reset link<br>
+            4. Check your spam folder too
+          </div>
+        </details>
+      </div>
+    </div>
+    <div style="text-align:center;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)">
+      <div style="color:#8aa8c8;font-size:12px;margin-bottom:12px">Reach us on any platform</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <a href="https://wa.me/254798051971" target="_blank" style="padding:8px 16px;background:rgba(37,211,102,.15);border:1px solid rgba(37,211,102,.3);border-radius:8px;color:#25d366;text-decoration:none;font-size:13px;font-weight:600">&#128172; WhatsApp</a>
+        <a href="mailto:support@africaictnetwork.online" style="padding:8px 16px;background:rgba(0,200,212,.15);border:1px solid rgba(0,200,212,.3);border-radius:8px;color:#00c8d4;text-decoration:none;font-size:13px;font-weight:600">&#128231; Email</a>
+        <a href="tel:+254798051971" style="padding:8px 16px;background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.3);border-radius:8px;color:#f5c842;text-decoration:none;font-size:13px;font-weight:600">&#128222; Call</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function showSupportModal(tab){
+  var m=document.getElementById('supportModal')
+  m.style.display='block'
+  document.body.style.overflow='hidden'
+  m.onclick=function(e){if(e.target===m){m.style.display='none';document.body.style.overflow=''}}
+}
+</script>
 </body></html>
