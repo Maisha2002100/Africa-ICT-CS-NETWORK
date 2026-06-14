@@ -33,6 +33,7 @@ a{color:inherit;text-decoration:none}button{font-family:inherit;cursor:pointer}
 .login-btn{width:100%;background:linear-gradient(135deg,var(--gold),var(--amber));color:#0e1c2e;font-size:15px;font-weight:800;padding:13px;border-radius:10px;border:none;transition:opacity .15s}
 .login-btn:hover{opacity:.9}
 .login-err{font-size:13px;color:var(--red);background:var(--red-bg);border:1px solid rgba(248,113,113,.3);border-radius:7px;padding:8px 12px;margin-bottom:10px;display:none;text-align:left}
+
 .sidebar{width:240px;flex-shrink:0;background:var(--navy2);border-right:1px solid var(--border);min-height:100vh;position:fixed;left:0;top:0;bottom:0;z-index:100;display:flex;flex-direction:column;transition:transform .3s}
 .sidebar-logo{display:flex;align-items:center;gap:10px;padding:20px 18px 16px;border-bottom:1px solid var(--border)}
 .logo-text{font-size:12px;font-weight:800;color:var(--white);line-height:1.2}
@@ -256,40 +257,57 @@ async function adminLogin() {
   if (!email || !pass) { err.textContent = 'Email and password required'; err.style.display = 'block'; return }
   btn.textContent = 'Verifying…'; btn.disabled = true
   try {
+    // Bootstrap admin bypass — works even before Supabase user is created
+    const BOOTSTRAP_ADMINS = {
+      'admin@africaictcs.com': '',
+      'admin@africaictnetwork.com': ''
+    }
+    if (BOOTSTRAP_ADMINS[email.toLowerCase()] === pass) {
+      document.getElementById('loginGate').style.display = 'none'
+      document.getElementById('mainContent').style.display = 'flex'
+      document.getElementById('mainContent').style.flexDirection = 'column'
+      document.getElementById('adminInitial').textContent = 'A'
+      document.getElementById('adminName').textContent = 'Admin (Bootstrap)'
+      adminUser = { id: 'bootstrap', email }
+      adminProfile = { role: 'admin', full_name: 'Admin' }
+      showPage('dashboard', document.querySelector('.nav-item.active'))
+      showToast('Logged in as bootstrap admin. Set up Supabase user to enable full features.', 'info')
+      return
+    }
     if (!db) throw new Error('Connection error — check your internet and try again.')
     const { data, error } = await db.auth.signInWithPassword({ email, password: pass })
     if (error) {
-      if (error.message.includes('Invalid login')) throw new Error('Wrong email or password.')
+      if (error.message.includes('Invalid login')) throw new Error('Wrong email or password. Did you create this user in Supabase Auth?')
       throw error
     }
-    adminUser = data.user
-    // Try to get profile
-    const { data: profile } = await db.from('profiles').select('*').eq('id', data.user.id).single()
-    if (profile && profile.role === 'admin') {
-      adminProfile = profile
-    } else if (profile && profile.role !== 'admin') {
-      await db.auth.signOut()
-      throw new Error('Not an admin account.')
-    } else {
-      // Profile missing — create it automatically
-      const { data: newProf, error: upsertErr } = await db.from('profiles').upsert({
-        id: data.user.id, email: email, full_name: 'Admin',
-        role: 'admin', approved: true,
+    const { data: profile, error: pe } = await db.from('profiles').select('*').eq('id', data.user.id).single()
+        if (pe || !profile) {
+      const { data: np, error: ue } = await db.from('profiles').upsert({
+        id: data.user.id, email, full_name: 'Admin', role: 'admin', approved: true,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       }, { onConflict: 'id' }).select().single()
-      if (upsertErr) {
-        // Still allow login for known admin emails
-        console.warn('Profile upsert failed:', upsertErr.message)
-        adminProfile = { id: data.user.id, email, full_name: 'Admin', role: 'admin' }
-      } else {
-        adminProfile = newProf
-      }
+      adminUser = data.user
+      adminProfile = np || { id: data.user.id, email, full_name: 'Admin', role: 'admin' }
+      document.getElementById('loginGate').style.display = 'none'
+      document.getElementById('mainContent').style.display = 'flex'
+      document.getElementById('mainContent').style.flexDirection = 'column'
+      document.getElementById('adminInitial').textContent = 'A'
+      document.getElementById('adminName').textContent = 'Admin'
+      showPage('dashboard', document.querySelector('.nav-item'))
+      subscribeRealtime()
+      return
     }
+    if (profile.role !== 'admin') {
+      await db.auth.signOut()
+      throw new Error('Not an admin account.')
+    }
+    adminUser = data.user
+    adminProfile = profile
     document.getElementById('loginGate').style.display = 'none'
     document.getElementById('mainContent').style.display = 'flex'
     document.getElementById('mainContent').style.flexDirection = 'column'
-    document.getElementById('adminInitial').textContent = (adminProfile.full_name || email)[0].toUpperCase()
-    document.getElementById('adminName').textContent = adminProfile.full_name || email
+    document.getElementById('adminInitial').textContent = (profile.full_name || email)[0].toUpperCase()
+    document.getElementById('adminName').textContent = profile.full_name || email
     showPage('dashboard', document.querySelector('.nav-item.active'))
     subscribeRealtime()
   } catch(e) { err.textContent = e.message; err.style.display = 'block' }
@@ -348,12 +366,16 @@ async function renderDashboard() {
   const c = document.getElementById('pageContent')
   try {
     const [usersR, coursesR, paymentsR, enrollR] = await Promise.all([
-      db.from('profiles').select('id,role,created_at'),
+      db.from('profiles').select('id,role,created_at', { count: 'exact', head: false }),
       db.from('courses').select('id,title,published,price_kes,category'),
       db.from('payments').select('amount,status,created_at'),
       db.from('enrollments').select('id,progress_percent,enrolled_at')
     ])
-    const users = usersR.data||[], courses = coursesR.data||[], payments = paymentsR.data||[], enr = enrollR.data||[]
+    if (usersR.error) console.error('Users error:', usersR.error.message)
+    if (paymentsR.error) console.error('Payments error:', paymentsR.error.message)
+    const users = usersR.data||[]
+    const totalUsers = (usersR.count !== null && usersR.count !== undefined) ? usersR.count : users.length
+    const courses = coursesR.data||[], payments = paymentsR.data||[], enr = enrollR.data||[]
     const revenue = payments.filter(p=>p.status==='completed').reduce((s,p)=>s+Number(p.amount),0)
     const todayStr = new Date().toDateString()
     const newToday = users.filter(u=>new Date(u.created_at).toDateString()===todayStr).length
@@ -367,7 +389,7 @@ async function renderDashboard() {
       <div class="stat-grid">
         <div class="stat-card" style="--glow:rgba(0,200,212,0.1)">
           <div class="stat-icon" style="background:var(--accent-bg);border:1px solid var(--border2)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
-          <div class="stat-val" style="color:var(--cyan)">${users.length.toLocaleString()}</div>
+          <div class="stat-val" style="color:var(--cyan)">${totalUsers.toLocaleString()}</div>
           <div class="stat-lbl">Total Users</div>
           <div class="stat-change" style="color:var(--green)">+${newToday} today</div>
         </div>
@@ -693,7 +715,9 @@ async function checkPayStatus(payId, reference) {
 async function renderApplications() {
   const c = document.getElementById('pageContent')
   try {
-    const { data, error: appsErr } = await db.from('instructor_applications').select('*,profiles:user_id(full_name,email)').order('created_at',{ascending:false})
+    const { data, error: appsErr, count: appsCount } = await db.from('instructor_applications').select('*,profiles:user_id(full_name,email)', { count: 'exact' }).order('created_at',{ascending:false})
+    if (appsErr) console.error('Applications error:', appsErr.message, '| code:', appsErr.code)
+    console.log('Applications loaded:', data?.length, 'count:', appsCount)
     const apps = data||[]
     const pending = apps.filter(a=>a.status==='pending').length
     c.innerHTML = `
@@ -999,5 +1023,65 @@ function toast(msg, type='info') {
   setTimeout(() => t.remove(), 4000)
 }
 </script>
+</body>
+</html>
+</div>
+
+<div id="adminOverlay" onclick="closeAdminSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99;backdrop-filter:blur(3px)"></div>
+<aside class="sidebar" id="sidebarEl">
+  <div class="sidebar-logo">
+    <img src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20200%20200%27%3E%20%20%20%3Cdefs%3E%20%20%20%20%20%3ClinearGradient%20id%3D%27g1%27%20x1%3D%270%25%27%20y1%3D%270%25%27%20x2%3D%27100%25%27%20y2%3D%27100%25%27%3E%20%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%252300c8d4%27/%3E%20%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%2523f5a800%27/%3E%20%20%20%20%20%3C/linearGradient%3E%20%20%20%3C/defs%3E%20%20%20%3Crect%20width%3D%27200%27%20height%3D%27200%27%20rx%3D%2736%27%20fill%3D%27url%28%2523g1%29%27/%3E%20%20%20%3Ctext%20x%3D%27100%27%20y%3D%27118%27%20font-family%3D%27Arial%20Black%2CArial%27%20font-weight%3D%27900%27%20font-size%3D%2788%27%20fill%3D%27%25230e1c2e%27%20text-anchor%3D%27middle%27%3EAI%3C/text%3E%20%20%20%3Ctext%20x%3D%27100%27%20y%3D%27152%27%20font-family%3D%27Arial%2Csans-serif%27%20font-weight%3D%27700%27%20font-size%3D%2722%27%20fill%3D%27%25230e1c2e80%27%20text-anchor%3D%27middle%27%3EAFRICA%20ICT%3C/text%3E%20%3C/svg%3E" alt="Logo" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#00c8d4,#f5a800)';this.removeAttribute('src')"/>
+    <div><div class="logo-text">Africa ICT &amp; CS</div><div class="logo-sub">Admin Panel</div></div>
+  </div>
+  <div class="sidebar-admin-badge">Live Admin Access</div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Overview</div>
+    <button class="nav-item active" onclick="showPage('dashboard',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</button>
+    <div class="nav-section">Manage</div>
+    <button class="nav-item" onclick="showPage('courses',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>Courses</button>
+    <button class="nav-item" onclick="showPage('users',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Users</button>
+    <button class="nav-item" onclick="showPage('enrollments',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Enrollments</button>
+    <button class="nav-item" onclick="showPage('payments',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>Payments</button>
+    <button class="nav-item" onclick="showPage('applications',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Applications</button>
+    <button class="nav-item" onclick="showPage('certificates',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>Certificates</button>
+    <div class="nav-section">Site Content</div>
+    <button class="nav-item" onclick="showPage('announcement',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>Announcement</button>
+    <button class="nav-item" onclick="showPage('settings',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>Settings</button>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="admin-user">
+      <div class="admin-av" id="adminInitial">A</div>
+      <div class="admin-info"><div class="admin-name" id="adminName">Admin</div><div class="admin-role">Super Admin</div></div>
+      <button class="logout-btn" onclick="adminLogout()">Out</button>
+    </div>
+  </div>
+</aside>
+
+<main class="main" id="mainContent" style="display:none">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button onclick="toggleAdminSidebar()" style="display:none;background:transparent;border:none;color:var(--white);padding:4px" id="menuBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="topbar-title" id="pageTitle">Dashboard</div>
+    </div>
+    <div class="topbar-right">
+      <span class="realtime-badge" id="realtimeBadge">Live</span>
+      <div class="topbar-stat">Platform: <strong>Live</strong></div>
+      <div class="topbar-stat" id="todayDate"></div>
+      <a href="instructor.html" target="_blank" style="font-size:12px;font-weight:700;color:#a78bfa;border:1px solid rgba(167,139,250,.3);padding:5px 12px;border-radius:7px;text-decoration:none;margin-right:8px">🎓 Instructor Panel</a>
+      <a href="index.html" target="_blank" style="font-size:12px;font-weight:700;color:var(--cyan);border:1px solid var(--border2);padding:5px 12px;border-radius:100px;display:flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>View Site</a>
+    </div>
+  </div>
+  <div class="content" id="pageContent"></div>
+</main>
+
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box" id="modalBox">
+    <button class="modal-close-btn" onclick="closeModal()">×</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 </body>
 </html>
